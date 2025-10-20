@@ -10,29 +10,11 @@ Last updated: 2025-10-20
 - [ ] Qualtrics sync tested against staging survey.
 - [ ] Dry-run send produces expected `.eml` files.
 - [ ] Stakeholders sign off on participant communications.
-
-## 2. Deployment Steps (future)
-1. Update `.env` or secret store with production configuration.
-2. Package code (git tag or container image) once tests pass.
-3. Deploy to target host (to be determined: cron job, serverless, etc.).
-4. Run validation and dry-run commands.
-5. Enable scheduled execution (cron/systemd/github actions) once verified.
-
-## 3. Versioning & Rollback
-- Tag releases as `vYYYY.MM.DD` once shipped.
-- Keep previous release tarball or image for quick rollback.
-- Maintain historical CSV roster snapshots in secure storage.
-
-## 4. Support & Escalation
-- First-line support: research operator on duty.
-- Escalation path: engineering lead → infrastructure lead → product owner.
-- Log incidents in shared tracker (TBD) with timestamps, DID, error cause, mitigation.
-
-## 5. Maintenance Windows
-- Schedule updates outside participant send window (before 05:00 cutoff).
-- Notify stakeholders before downtime exceeding 15 minutes.
-
-## 6. Future Improvements
-- Automate deployment via CI/CD pipeline.
-- Add health checks and synthetic tests to monitor send success rate.
-- Implement automated backups for compliance and participant data.
+- [ ] Add health checks and synthetic tests to monitor send success rate.
+- [ ] Add a dashboard that allows for both a detailed inspection of certain participants by did, as well as a general overview to track compliance and email notifications. Show compliance in continuous metrics, not binaries (e.g., for the engagement on a day not yes/no but rather how many engagements).
+- [ ] Compliance criteria are exposed as environment variables to allow meaningful adjustments. E.g.,:
+	- max_skip_span = how many days participants are allowed to skip in a row.
+	- min_active_days = how many days participants have to have been active.
+	Active day definitions
+	- min_engagement = how many engagements are required for the definition 'active day'
+	- min_retrievals = how many retrievals are required for the definition 'active day'

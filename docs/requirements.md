@@ -72,17 +72,17 @@ The MVP of the Mail Updater delivers automated daily progress emails to study pa
 - [ ] README documents setup, fixture usage, and CLI commands.
 - [ ] CHANGELOG contains PREPARE-COMMIT entry for the sprint.
 
-## 7. Open Questions
+## 7. Open Questions & Decisions
 
-| ID | Topic | Owner | Notes |
-|----|-------|-------|-------|
-| Q1 | Should roster CSV migrate to a managed database (mail.db) before launch? | Philipp | Impacts ongoing edits & audit trail |
-| Q2 | Do we need HTML emails or is text sufficient for MVP? | Research team | Template currently includes optional HTML |
-| Q3 | What post-MVP KPIs must we track (delivery rate, engagement)? | Product | Drives future observability/metrics |
+| ID | Topic | Owner | Status |
+|----|-------|-------|--------|
+| Q1 | Migrate roster to managed storage (mail.db) | Philipp | ✅ Proceed with designing mail.db schema post-MVP; add backlog task for migration. |
+| Q2 | Email format (text vs HTML) | Research team | ✅ MVP will ship text-only email; HTML remains optional enhancement. |
+| Q3 | Post-MVP KPIs to track | Product | ✅ Monitor proportion of successful deliveries and delivery latency; backlog item to instrument metrics. |
+
 
 ## 8. Risks & Mitigations
 
 - **SMTP deliverability:** Mitigate by supporting dry-run mode and performing credential smoke tests.
 - **Qualtrics survey schema drift:** Guard via CSV validation and tests; raise alerts when unexpected columns appear.
 - **Participant onboarding gaps:** `validate-participants` command surfaces missing activity before daily sends.
-

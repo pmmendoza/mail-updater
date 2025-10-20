@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS email_outbox (
 );
 ```
 
-> You’ll continue to read **raw** data from your existing `compliance.db` (`engagements`, `feed_requests`, `feed_request_posts`). This repo only *adds* `mail.db`.
+You'll continue to read **raw** data from the existing `compliance.db` tables (`engagements`, `feed_requests`, `feed_request_posts`). The mail-updater project only adds a lightweight `mail.db` when we introduce persistent state.
 
 ---
 
@@ -272,7 +272,7 @@ def compute_or_update_snapshots(raw_db_path, mail_db_session, cutoff_hour_local,
             upsert_compliance_daily(mail_db_session, p.user_did, d.date, retrievals, engagements, active, cumulative, on_track)
 ```
 
-> Provide small helper queries for raw tables (`feed_requests`, `engagements`) by `(user_did, ts range)`.
+Provide helper query functions for the raw tables (`feed_requests`, `engagements`) parameterized by `(user_did, timestamp range)` so downstream consumers (CLI, R wrapper) can reuse identical filtering logic.
 
 ---
 

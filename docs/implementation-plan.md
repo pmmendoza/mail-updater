@@ -8,6 +8,7 @@ This document captures the remaining work required to turn the `mail-updater` re
 - ✅ **Tooling/tests**: `make lint`/`make test` targets, compliance snapshot unit tests, and a reusable SQLite fixture support local verification.
 - ✅ **Qualtrics integration**: Python-based sync replaces the R script; a CLI command (`sync-participants`) plus tests and docs are in place.
 - ✅ **Requirements & ops docs**: Drafted `docs/requirements.md`, `docs/operations.md`, and `docs/maintenance.md` covering MVP scope and runbooks.
+- ✅ **Architecture overview**: Added `docs/architecture.md` outlining component topology, data flow, and risks.
 - ⏳ **Next focus**: stakeholder review/sign-off for requirements (Step 1) and implementation of deployment automation (Step 7).
 
 ## 1. Collect and Document Product Requirements (Crucial)
