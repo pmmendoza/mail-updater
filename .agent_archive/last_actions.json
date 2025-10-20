@@ -32,5 +32,53 @@
     ],
     "preflight": "N/A",
     "branch": "main"
+  },
+  {
+    "ts": "2025-10-20T14:34:34Z",
+    "task": "Implement Qualtrics participant sync",
+    "files": [
+      "participants-updater.R",
+      "app/qualtrics_sync.py",
+      "app/cli.py",
+      "app/config.py",
+      "data/participants.csv",
+      "tests/test_participants.py",
+      "tests/test_qualtrics_sync.py",
+      "README.md",
+      ".env.template",
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "FAIL",
+    "branch": "main"
+  },
+  {
+    "ts": "2025-10-20T14:53:33Z",
+    "task": "Python Qualtrics participant sync implementation",
+    "files": [
+      "app/qualtrics_sync.py",
+      "app/participants.py",
+      "app/config.py",
+      "app/cli.py",
+      "tests/test_qualtrics_sync.py",
+      "tests/test_participants.py",
+      "requirements.txt",
+      "README.md",
+      ".env.template",
+      "data/participants.csv",
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "FAIL",
+    "branch": "main"
+  },
+  {
+    "ts": "2025-10-20T15:18:11Z",
+    "task": "Add Qualtrics sync feedback counts",
+    "files": [
+      "app/qualtrics_sync.py",
+      "app/cli.py",
+      "tests/test_qualtrics_sync.py"
+    ],
+    "preflight": "PASS",
+    "branch": "main"
   }
 ]

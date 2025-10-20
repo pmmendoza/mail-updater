@@ -13,6 +13,7 @@ from .db import get_engine
 from .email_renderer import render_daily_progress
 from .mailer import MailSender
 from .participants import Participant, filter_active, load_participants
+from .qualtrics_sync import QualtricsSyncError, sync_participants_from_qualtrics
 
 
 def _load_settings() -> Settings:
@@ -128,6 +129,26 @@ def send_daily_command(dry_run: Optional[bool]) -> None:
 
     click.echo(
         f"Completed send loop. Participants processed: {total}; messages prepared: {sent}."
+    )
+
+
+@cli.command("sync-participants")
+@click.option(
+    "--survey-filter",
+    default=None,
+    help="Optional regex pattern to select Qualtrics surveys to include.",
+)
+def sync_participants_command(survey_filter: Optional[str]) -> None:
+    """Refresh the participant roster from Qualtrics via the REST API."""
+    settings = _load_settings()
+    try:
+        result = sync_participants_from_qualtrics(settings, survey_filter=survey_filter)
+    except QualtricsSyncError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(
+        "Participants roster synced from Qualtrics: "
+        f"{result.added_participants} new / {result.total_participants} total entries "
+        f"across {result.surveys_considered} surveys."
     )
 
 

@@ -4,9 +4,11 @@ python-dotenv
 pytz
 python-dateutil
 Jinja2
+requests
 pytest
 ruff
 black
 mypy
 types-python-dateutil
 types-pytz
+types-requests

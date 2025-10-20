@@ -69,6 +69,9 @@ class Settings:
     mail_subject: str = os.getenv(
         "MAIL_SUBJECT", "Bluesky Feed Project: daily progress update"
     )
+    qualtrics_base_url: Optional[str] = os.getenv("QUALTRICS_BASE_URL")
+    qualtrics_api_token: Optional[str] = os.getenv("QUALTRICS_API_TOKEN")
+    qualtrics_survey_filter: Optional[str] = os.getenv("QUALTRICS_SURVEY_FILTER")
 
     def ensure_outbox(self) -> None:
         """Create directories used by the mailer if missing."""
@@ -99,4 +102,7 @@ class Settings:
             "outbox_dir": str(self.outbox_dir),
             "send_log_path": str(self.send_log_path),
             "mail_subject": self.mail_subject,
+            "qualtrics_base_url": self.qualtrics_base_url,
+            "qualtrics_api_token": bool(self.qualtrics_api_token),
+            "qualtrics_survey_filter": self.qualtrics_survey_filter,
         }

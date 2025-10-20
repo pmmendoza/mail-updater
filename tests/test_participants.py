@@ -17,14 +17,19 @@ def test_participants_csv_integrity() -> None:
     allowed_status = {"active", "inactive"}
     allowed_types = {"prolific", "pilot", "admin", "tests"}
 
+    seen_dids = set()
     for row in rows:
         assert row["email"], "email is required"
         assert row["did"].startswith("did:"), "did must include the did: prefix"
         assert row["status"] in allowed_status, f"unexpected status {row['status']!r}"
         assert row["type"] in allowed_types, f"unexpected type {row['type']!r}"
+        assert row["did"] not in seen_dids, f"duplicate did {row['did']!r}"
+        seen_dids.add(row["did"])
 
-    sample = rows[0]
-    assert sample["email"] == "philipp.m.mendoza@gmail.com"
-    assert sample["did"] == "did:plc:3vomhawgkjhtvw4euuxbll3r"
-    assert sample["status"] == "active"
-    assert sample["type"] == "admin"
+    assert any(
+        row["email"] == "philipp.m.mendoza@gmail.com"
+        and row["did"] == "did:plc:3vomhawgkjhtvw4euuxbll3r"
+        and row["status"] == "active"
+        and row["type"] == "admin"
+        for row in rows
+    ), "seed admin participant row missing"
