@@ -1,0 +1,36 @@
+[
+  {
+    "ts": "2025-10-20T12:15:46Z",
+    "task": "Seed participants roster dataset",
+    "files": [
+      "data/participants.csv",
+      "tests/test_participants.py",
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "FAIL",
+    "branch": "main"
+  },
+  {
+    "ts": "2025-10-20T14:01:14Z",
+    "task": "Makefile automation lint/test setup",
+    "files": [
+      "Makefile",
+      "scripts/sync_env.py",
+      "requirements.txt",
+      "app/mailer.py",
+      "data/participants.csv",
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "FAIL",
+    "branch": "main"
+  },
+  {
+    "ts": "2025-10-20T14:22:41Z",
+    "task": "Qualtrics participant sync planning",
+    "files": [
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "N/A",
+    "branch": "main"
+  }
+]

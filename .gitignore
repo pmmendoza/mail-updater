@@ -1,1 +1,7 @@
-.DS_Store
+.env
+.venv/
+__pycache__/
+outbox/
+AGENTS_TODO.md
+AGENTS.md
+*.DS_Store

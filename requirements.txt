@@ -1,0 +1,12 @@
+click
+SQLAlchemy
+python-dotenv
+pytz
+python-dateutil
+Jinja2
+pytest
+ruff
+black
+mypy
+types-python-dateutil
+types-pytz

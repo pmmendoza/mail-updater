@@ -1,0 +1,16 @@
+Bluesky Feed Project — Daily Progress Update
+
+Participant DID: {{ participant.user_did }}
+Active days so far: {{ summary.active_days }} / {{ summary.required_active_days }}
+On track to reach {{ summary.required_active_days }} days: {% if summary.on_track %}Yes{% else %}No{% endif %}
+
+14-day window overview:
+{% for snap in snapshots %}
+- {{ snap.study_day.isoformat() }} — retrievals: {{ snap.retrievals }}, engagements: {{ snap.engagements }}, active: {% if snap.active_day %}✅{% else %}○{% endif %}, cumulative active: {{ snap.cumulative_active }}
+{% endfor %}
+
+This update reflects activity logged up to {{ summary.computed_at.isoformat() }} (UTC).
+
+If you believe this information is inaccurate, please contact the research team.
+
+— Automated message from the NEWSFLOWS study tools

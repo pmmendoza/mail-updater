@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Daily Progress Update</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #1f2933; }
+      table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+      th, td { border: 1px solid #cbd5e0; padding: 6px 8px; text-align: left; font-size: 14px; }
+      th { background-color: #f1f5f9; }
+    </style>
+  </head>
+  <body>
+    <h2>Bluesky Feed Project — Daily Progress Update</h2>
+    <p><strong>Participant DID:</strong> {{ participant.user_did }}</p>
+    <p><strong>Active days so far:</strong> {{ summary.active_days }} / {{ summary.required_active_days }}</p>
+    <p><strong>On track:</strong> {% if summary.on_track %}Yes{% else %}No{% endif %}</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Retrievals</th>
+          <th>Engagements</th>
+          <th>Active</th>
+          <th>Cumulative Active</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for snap in snapshots %}
+        <tr>
+          <td>{{ snap.study_day.isoformat() }}</td>
+          <td>{{ snap.retrievals }}</td>
+          <td>{{ snap.engagements }}</td>
+          <td>{% if snap.active_day %}✅{% else %}○{% endif %}</td>
+          <td>{{ snap.cumulative_active }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <p style="margin-top: 12px; font-size: 13px; color: #475569;">
+      This update reflects activity logged up to {{ summary.computed_at.isoformat() }} (UTC).
+    </p>
+    <p style="font-size: 13px; color: #475569;">
+      If you believe this information is inaccurate, please reply to this message or contact the research team.
+    </p>
+    <p style="font-size: 13px; color: #475569;">— Automated message from the NEWSFLOWS study tools</p>
+  </body>
+</html>
