@@ -7,7 +7,8 @@ This document captures the remaining work required to turn the `mail-updater` re
 - ✅ **MVP prototype**: CLI scaffolding, compliance snapshot logic, participant roster management, and Qualtrics sync have landed. The README now documents setup, the new `validate-participants` command, and the fixture workflow.
 - ✅ **Tooling/tests**: `make lint`/`make test` targets, compliance snapshot unit tests, and a reusable SQLite fixture support local verification.
 - ✅ **Qualtrics integration**: Python-based sync replaces the R script; a CLI command (`sync-participants`) plus tests and docs are in place.
-- ⏳ **Next focus**: finalize requirements documentation (Step 1), expand operational docs (Step 6), and tackle deployment readiness (Step 7).
+- ✅ **Requirements & ops docs**: Drafted `docs/requirements.md`, `docs/operations.md`, and `docs/maintenance.md` covering MVP scope and runbooks.
+- ⏳ **Next focus**: stakeholder review/sign-off for requirements (Step 1) and implementation of deployment automation (Step 7).
 
 ## 1. Collect and Document Product Requirements (Crucial)
 
