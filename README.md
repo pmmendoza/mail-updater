@@ -15,6 +15,9 @@ This directory contains a minimal, working example of the mail updater pipeline.
    ```bash
    cp .env.template .env
    # edit .env with your Greenhost SMTP credentials or leave SMTP_DRY_RUN=true
+   python scripts/create_compliance_fixture.py  # optional sample database
+   # set COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db for local testing
+   # set PARTICIPANTS_CSV_PATH=data/participants.csv to use the bundled roster sample
    ```
 3. **Prepare participant data**
    - Create `data/participants.csv` (relative to the repository root) with columns:
@@ -27,7 +30,27 @@ This directory contains a minimal, working example of the mail updater pipeline.
    python -m app.cli aggregate            # show per-participant status
    python -m app.cli preview --user-did did:example:123
    python -m app.cli send-daily --dry-run # writes .eml files to outbox/
+   python -m app.cli validate-participants # confirm roster entries have data
    ```
+
+### Local smoke test with bundled fixtures
+
+Generate the sample compliance database and exercise the CLI without touching
+production assets:
+
+```bash
+python scripts/create_compliance_fixture.py
+COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db \
+PARTICIPANTS_CSV_PATH=data/participants.csv \
+python -m app.cli validate-participants
+
+COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db \
+PARTICIPANTS_CSV_PATH=data/participants.csv \
+python -m app.cli send-daily --dry-run
+```
+
+These commands should report zero duplicates, confirm all participants have
+activity, and emit a dry-run email under `outbox/`.
 
 ## Project layout
 

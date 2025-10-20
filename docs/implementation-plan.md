@@ -2,6 +2,13 @@
 
 This document captures the remaining work required to turn the `mail-updater` repository into a fully functional product. The plan is structured around the seven major steps identified previously. For each step we outline the overarching goal, why the step matters, the requirements that must be satisfied, and the Definition of Done (DoD). Priority levels indicate whether a step is **Crucial**, **Important**, or **Nice to Have** for a successful launch.
 
+## Status Update — 2025-10-20
+
+- ✅ **MVP prototype**: CLI scaffolding, compliance snapshot logic, participant roster management, and Qualtrics sync have landed. The README now documents setup, the new `validate-participants` command, and the fixture workflow.
+- ✅ **Tooling/tests**: `make lint`/`make test` targets, compliance snapshot unit tests, and a reusable SQLite fixture support local verification.
+- ✅ **Qualtrics integration**: Python-based sync replaces the R script; a CLI command (`sync-participants`) plus tests and docs are in place.
+- ⏳ **Next focus**: finalize requirements documentation (Step 1), expand operational docs (Step 6), and tackle deployment readiness (Step 7).
+
 ## 1. Collect and Document Product Requirements (Crucial)
 
 ### Goal & Motivation

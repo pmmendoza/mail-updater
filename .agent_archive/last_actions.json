@@ -80,5 +80,32 @@
     ],
     "preflight": "PASS",
     "branch": "main"
+  },
+  {
+    "ts": "2025-10-20T16:44:19Z",
+    "task": "MVP minimal plan sprint tasks",
+    "files": [
+      "app/cli.py",
+      "tests/test_compliance_snapshot.py",
+      "scripts/create_compliance_fixture.py",
+      "data/fixtures/compliance_fixture.db",
+      "README.md",
+      ".env.template",
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "PASS",
+    "branch": "main"
+  },
+  {
+    "ts": "2025-10-20T17:12:25Z",
+    "task": "Document MVP outputs",
+    "files": [
+      "CHANGELOG.md",
+      "docs/implementation-plan.md",
+      "README.md",
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "PASS",
+    "branch": "main"
   }
 ]

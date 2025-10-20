@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+from sqlalchemy import text
 
 from .config import Settings
 from .compliance_snapshot import WindowSummary, compute_window_summary
@@ -23,6 +24,19 @@ def _load_settings() -> Settings:
 def _load_participant_map(csv_path: Path) -> dict[str, Participant]:
     participants = load_participants(csv_path)
     return {p.user_did: p for p in participants}
+
+
+def _participant_has_activity(engine, user_did: str) -> bool:
+    """Return True when the participant appears in feed_requests or engagements."""
+    queries = (
+        text("SELECT 1 FROM feed_requests WHERE requester_did = :did LIMIT 1"),
+        text("SELECT 1 FROM engagements WHERE did_engagement = :did LIMIT 1"),
+    )
+    with engine.connect() as conn:
+        for query in queries:
+            if conn.execute(query, {"did": user_did}).first():
+                return True
+    return False
 
 
 def _summaries_for_participants(
@@ -150,6 +164,46 @@ def sync_participants_command(survey_filter: Optional[str]) -> None:
         f"{result.added_participants} new / {result.total_participants} total entries "
         f"across {result.surveys_considered} surveys."
     )
+
+
+@cli.command("validate-participants")
+def validate_participants_command() -> None:
+    """Verify participant roster entries are unique and present in compliance data."""
+    settings = _load_settings()
+    participants = load_participants(settings.participants_csv_path)
+    participant_map = {p.user_did: p for p in participants}
+    engine = get_engine(settings.compliance_db_path)
+
+    duplicates: list[str] = []
+    seen: set[str] = set()
+
+    missing_activity: list[Participant] = []
+    for participant in participants:
+        if participant.user_did in seen:
+            duplicates.append(participant.user_did)
+            continue
+        seen.add(participant.user_did)
+        if not _participant_has_activity(engine, participant.user_did):
+            missing_activity.append(participant)
+
+    click.echo(f"Participants in roster: {len(participant_map)}")
+    if duplicates:
+        click.echo(f"Duplicate DIDs detected: {len(duplicates)}")
+        for did in duplicates:
+            click.echo(f"  - {did}")
+        raise click.ClickException("Duplicate participant DIDs detected in roster.")
+    else:
+        click.echo("No duplicate DIDs detected.")
+
+    if missing_activity:
+        click.echo(f"Participants without compliance activity: {len(missing_activity)}")
+        for participant in missing_activity:
+            click.echo(f"  - {participant.user_did} ({participant.email})")
+        raise click.ClickException(
+            "Participant roster contains entries without compliance activity."
+        )
+
+    click.echo("Roster validation successful: all participants have activity.")
 
 
 def main() -> None:
