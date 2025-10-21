@@ -30,7 +30,7 @@
    - Prefer delegating the SQL/logic to a helper inside `compliance_tracker` to keep business logic centralized; expose it as a function we can import.
    - Store or cache the resulting daily snapshots in memory for MVP (no write-back yet).
 3. **Participant source**
-   - Define a simple participants loader that reads `data/participants.csv` (columns: `user_did`, `email`, `language`, `include_in_emails`).
+   - Define a simple participants loader that reads `data/participants.csv` (columns: `email`, `did`, `status`, `type`, `language`).
    - Provide a CLI command to validate participant rows against compliance data (warn on missing DID).
    - Optionally scaffold a minimal `mail.db` with just a `participants` table for the MVP if CSV proves too brittle.
 4. **Email composition & delivery**
@@ -48,10 +48,10 @@
 6. **Validation & observability**
    - Add unit tests (pytest) for the snapshot logic using in-memory SQLite fixtures.
    - Provide a smoke-test script (`scripts/mvp_check.sh`) that runs `aggregate` followed by a dry-run send for a test DID.
-   - Log each send attempt to a CSV or JSONL for traceability until `email_outbox` is implemented.
+   - Log each send attempt to a CSV or JSONL for traceability until `send_attempts` is implemented.
 
 ## Deliverables & Exit Criteria
-- Running `python -m app.cli send-daily --dry-run` produces email files for all `include_in_emails=1` participants with accurate progress numbers.
+- Running `python -m app.cli send-daily --dry-run` produces email files for all participants whose `status` is `active`, with accurate progress numbers.
 - Snapshot calculations match manual spot-checks against `compliance.db` for at least two users across edge cases (on-track, off-track).
 - Configuration, templates, and CLI usage documented in `mail-updater/README.md`.
 

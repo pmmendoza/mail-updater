@@ -15,10 +15,14 @@ import requests
 from requests import Response, Session
 
 from .config import Settings
+from .mail_db.operations import (
+    DEFAULT_STATUS,
+    DEFAULT_TYPE,
+    list_participants,
+    upsert_participants,
+)
 
 REQUIRED_HEADERS = ["email", "did", "status", "type"]
-DEFAULT_STATUS = "active"
-DEFAULT_TYPE = "pilot"
 PROLIFIC_TYPE = "prolific"
 
 
@@ -252,6 +256,9 @@ def _merge_participants(
             continue
         record = merged.get(did)
         if record:
+            new_email = (row.get("email") or "").strip()
+            if new_email and new_email != record.get("email"):
+                record["email"] = new_email
             if not record.get("email") and row.get("email"):
                 record["email"] = row["email"].strip()
             if not record.get("status"):
@@ -286,7 +293,15 @@ def sync_participants_from_qualtrics(
         )
 
     csv_path = settings.participants_csv_path
-    existing_rows = _read_existing(csv_path)
+    settings.ensure_mail_db_parent()
+    db_path = settings.mail_db_path
+
+    existing_db_rows = list_participants(db_path)
+    if existing_db_rows:
+        existing_rows = existing_db_rows
+    else:
+        existing_rows = _read_existing(csv_path)
+
     existing_dids = {
         row.get("did", "").strip() for row in existing_rows if row.get("did")
     }
@@ -307,11 +322,16 @@ def sync_participants_from_qualtrics(
 
     if not surveys:
         # Nothing to do; keep the current roster.
-        _write_csv(csv_path, existing_rows or [])
+        if existing_db_rows:
+            _write_csv(csv_path, existing_db_rows)
+            total_participants = len(existing_db_rows)
+        else:
+            _write_csv(csv_path, existing_rows or [])
+            total_participants = len(existing_dids)
         return SyncResult(
             surveys_considered=0,
             responses_processed=0,
-            total_participants=len(existing_dids),
+            total_participants=total_participants,
             added_participants=0,
         )
 
@@ -321,22 +341,31 @@ def sync_participants_from_qualtrics(
 
     new_rows = _rows_from_responses(responses)
     if not new_rows:
-        _write_csv(csv_path, existing_rows or [])
+        if existing_db_rows:
+            _write_csv(csv_path, existing_db_rows)
+            total_participants = len(existing_db_rows)
+        else:
+            _write_csv(csv_path, existing_rows or [])
+            total_participants = len(existing_dids)
         return SyncResult(
             surveys_considered=len(surveys),
             responses_processed=len(responses),
-            total_participants=len(existing_dids),
+            total_participants=total_participants,
             added_participants=0,
         )
 
     merged = _merge_participants(existing_rows, new_rows)
-    _write_csv(csv_path, merged)
-    merged_dids = {row.get("did") for row in merged if row.get("did")}
-    added = len(merged_dids - existing_dids)
+
+    upsert_result = upsert_participants(db_path, merged)
+    current_roster = list_participants(db_path)
+    if current_roster:
+        _write_csv(csv_path, current_roster)
+    else:
+        _write_csv(csv_path, merged)
 
     return SyncResult(
         surveys_considered=len(surveys),
         responses_processed=len(responses),
-        total_participants=len(merged_dids),
-        added_participants=added,
+        total_participants=upsert_result.total,
+        added_participants=upsert_result.inserted,
     )

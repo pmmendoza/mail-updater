@@ -76,6 +76,13 @@ class Settings:
     qualtrics_api_token: Optional[str] = os.getenv("QUALTRICS_API_TOKEN")
     qualtrics_survey_filter: Optional[str] = os.getenv("QUALTRICS_SURVEY_FILTER")
 
+    imap_host: Optional[str] = os.getenv("IMAP_HOST")
+    imap_port: int = int(os.getenv("IMAP_PORT", "993"))
+    imap_username: Optional[str] = os.getenv("IMAP_USERNAME")
+    imap_password: Optional[str] = os.getenv("IMAP_PASSWORD")
+    imap_mailbox: str = os.getenv("IMAP_MAILBOX", "INBOX")
+    imap_use_ssl: bool = _str_to_bool(os.getenv("IMAP_USE_SSL"), default=True)
+
     def ensure_outbox(self) -> None:
         """Create directories used by the mailer if missing."""
         self.outbox_dir.mkdir(parents=True, exist_ok=True)
@@ -113,4 +120,9 @@ class Settings:
             "qualtrics_base_url": self.qualtrics_base_url,
             "qualtrics_api_token": bool(self.qualtrics_api_token),
             "qualtrics_survey_filter": self.qualtrics_survey_filter,
+            "imap_host": self.imap_host,
+            "imap_port": self.imap_port,
+            "imap_username": self.imap_username,
+            "imap_mailbox": self.imap_mailbox,
+            "imap_use_ssl": self.imap_use_ssl,
         }

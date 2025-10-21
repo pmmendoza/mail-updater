@@ -4,8 +4,8 @@ This roadmap builds on the MVP and guides the next development cycle toward a pr
 
 ## Sprint 1 — Persistence & Auditability
 - Introduce a lightweight SQLite database (`mail.db`) with migrations to persist participants, daily compliance snapshots, and email outbox records.
-- Implement upsert logic in the CLI to refresh participant entries from CSV while preserving per-user overrides (e.g., include flags, language tweaks).
-- Record every send attempt in the outbox table with status, timestamps, and rendered payload metadata to enable replay and audit trails.
+- Implement upsert logic in the CLI to refresh participant entries from CSV while preserving per-user overrides (e.g., status changes, language tweaks).
+- Record every send attempt in the `send_attempts` table with status, timestamps, and rendered payload metadata to enable replay and audit trails.
 - Add automated tests covering migration application and send logging.
 
 ## Sprint 2 — Shared Compliance Logic
@@ -28,8 +28,8 @@ This roadmap builds on the MVP and guides the next development cycle toward a pr
 
 ## Sprint 5 — Bounce Handling & Suppression
 - Implement IMAP polling for bounce folders, parsing DSNs to identify failing recipient addresses.
-- Automatically flip `include_in_emails` (or suppression flag) in the participant table when a hard bounce is detected.
-- Record bounce events in the outbox log and expose them in the status command/dashboard (if present).
+- Automatically flip participant `status` to `inactive` when a hard bounce is detected.
+- Record bounce events in the send log table and expose them in the status command/dashboard (if present).
 - Add end-to-end tests or scripted simulations for bounce handling to confirm suppression behaviour.
 
 ## Deferred / Optional Enhancements

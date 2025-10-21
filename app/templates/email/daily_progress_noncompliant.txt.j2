@@ -1,0 +1,18 @@
+Bluesky Feed Project — Action Needed
+
+We did not detect any feed retrievals or engagements in the latest study day.
+To stay eligible for the study payout you still need {{ summary.required_active_days - summary.active_days }} active days within the current window.
+
+What to do today:
+- Open your assigned feed and scroll the entire list.
+- Interact with at least three posts (like, repost, quote, or comment).
+- If you experience technical issues, reply to this email so we can help.
+
+Recent window snapshot:
+{% for snap in snapshots %}
+- {{ snap.study_day.isoformat() }} — retrievals: {{ snap.retrievals }}, engagements: {{ snap.engagements }}, active: {% if snap.active_day %}✅{% else %}○{% endif %}, cumulative active: {{ snap.cumulative_active }}
+{% endfor %}
+
+This alert reflects activity logged up to {{ summary.computed_at.isoformat() }} (UTC).
+
+— Automated message from the NEWSFLOWS study tools

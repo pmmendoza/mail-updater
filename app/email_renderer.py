@@ -38,18 +38,34 @@ def render_daily_progress(
 ) -> RenderedEmail:
     """Render subject and bodies for the daily progress email."""
     env = _environment()
+    latest_snapshot = summary.snapshots[-1] if summary.snapshots else None
+    non_compliant = False
+    if latest_snapshot is not None:
+        non_compliant = (
+            latest_snapshot.retrievals == 0 and latest_snapshot.engagements == 0
+        )
+
+    base_template = "daily_progress"
+    if (
+        non_compliant
+        and (TEMPLATES_DIR / "daily_progress_noncompliant.txt.j2").exists()
+    ):
+        base_template = "daily_progress_noncompliant"
+
     context = {
         "participant": participant,
         "summary": summary,
         "snapshots": summary.snapshots,
-        "latest_snapshot": summary.snapshots[-1] if summary.snapshots else None,
+        "latest_snapshot": latest_snapshot,
+        "non_compliant": non_compliant,
     }
-    text_template = env.get_template("daily_progress.txt.j2")
+    text_template = env.get_template(f"{base_template}.txt.j2")
     text_body = text_template.render(context)
 
     html_body = None
-    if (TEMPLATES_DIR / "daily_progress.html.j2").exists():
-        html_template = env.get_template("daily_progress.html.j2")
+    html_template_path = TEMPLATES_DIR / f"{base_template}.html.j2"
+    if html_template_path.exists():
+        html_template = env.get_template(f"{base_template}.html.j2")
         html_body = html_template.render(context)
 
     return RenderedEmail(subject=subject, text_body=text_body, html_body=html_body)

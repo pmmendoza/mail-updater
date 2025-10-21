@@ -1,6 +1,6 @@
-# mail.db Schema Proposal
+# mail.db Schema (v1)
 
-_Last updated: 2025-10-20_
+_Last updated: 2025-10-21_
 
 ## 1. Goals
 - Provide a durable source of truth for participant roster, status flags, and notification preferences.
@@ -25,7 +25,7 @@ CREATE TABLE participants (
     participant_id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_did TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL,
-    type TEXT DEFAULT 'pilot',             -- pilot | prolific | admin | tests
+    type TEXT DEFAULT 'pilot',             -- pilot | prolific | admin | test
     status TEXT DEFAULT 'active',          -- active | inactive | unsubscribed
     language TEXT DEFAULT 'en',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -33,6 +33,11 @@ CREATE TABLE participants (
 );
 CREATE INDEX idx_participants_status ON participants(status);
 ```
+
+**Status semantics**
+- `active`: participant receives regular updates.
+- `inactive`: participant is temporarily paused (bounce, manual hold, etc.).
+- `unsubscribed`: participant opted out; keep record for auditing.
 
 ### 3.2 participant_status_history
 ```sql
@@ -94,6 +99,19 @@ INSERT INTO metadata(key, value) VALUES ('schema_version', '1');
 3. **Sync loop**: CLI writes new snapshots/send attempts to mail.db while continuing to read compliance metrics from `compliance.db`.
 4. **CSV deprecation**: Once confidence is built, replace CSV read path with mail.db queries (with fallback export for manual editing).
 
+### 4.1 Roster synchronisation decision
+- Qualtrics sync should **upsert directly into `mail.db.participants`** while continuing to export `data/participants.csv` as a human-auditable backup.
+- New DIDs create a fresh row with `status='active'`; existing rows only update contact fields (`email`, `type`, `language`) and leave `status` untouched so manual overrides applied via `python -m app.cli participant set-status` remain authoritative.
+- Any status values present in the Qualtrics payload are ignored for existing records; the sync uses them only when seeding brand-new participants.
+- After the upsert, the CSV export mirrors the latest mail.db roster (including preserved statuses) to keep legacy tooling in lockstep.
+
+### 4.2 Send attempt persistence plan
+- Every render/send operation will insert a row into `send_attempts` **before** dispatch with `status='queued'`, capturing the participant, `message_type` (e.g., `daily_update`), `mode` (`dry-run` vs `live`), and the template hash/version.
+- Upon completion the CLI/mail sender updates that row to `status='sent'`, `status='failed'`, or `status='skipped'`, populating `smtp_response` (or failure reason).
+- Dry-run deliveries still write `mode='dry-run'` and attach the path to the `.eml` artefact inside `smtp_response` so the audit trail is uniform across environments.
+- Bounce handling reuses the existing row: the IMAP poller writes `status='failed'` with reason `bounced` and flips the participant status to `inactive` (see §4.1).
+- A lightweight helper in `app/mail_db.operations` exposes `record_send_attempt()`, `update_send_attempt()`, `fetch_recent_send_attempts()`, and `mark_send_attempt_bounced()` so the CLI, status views, and bounce scanner all share the same persistence logic.
+
 ## 5. CLI & API Implications
 - New CLI command: `python -m app.cli participant set-status --user-did <DID> --status inactive --reason 'manual review'`.
 - Validation command reads from mail.db when available; fallback to CSV during migration.
@@ -103,6 +121,8 @@ INSERT INTO metadata(key, value) VALUES ('schema_version', '1');
 - Should we normalise language/participant type into lookup tables? (Deferred unless values expand.)
 - Where to store unsubscribe preferences (boolean flag vs separate table)? For now, use `status='unsubscribed'`.
 - Do we need soft deletion? Use status `inactive` to keep history.
+>A: I'm happy with your choices.
+
 
 ## 7. Next Steps
 1. Review schema with stakeholders.

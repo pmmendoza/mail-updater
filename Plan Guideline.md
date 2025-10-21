@@ -18,9 +18,11 @@
   * `engagements(timestamp, did_engagement, engagement_type, post_uri, position_status, ...)`
 * New **mail.db** (this project):
 
-  * `participants(user_did, PROLIFIC_ID, pilot_email, feed_url, surveylang, include_in_emails, thread_message_id)`
-  * `compliance_daily(user_did, study_day_date, retrievals, engagements, active_day, cumulative_active, on_track, computed_at)`
-  * `email_outbox(..., status, smtp_response, payload_json, sent_at)`
+  * `participants(participant_id, user_did, email, status, type, language, created_at, updated_at)`
+  * `participant_status_history(participant_id, old_status, new_status, reason, changed_by, changed_at)`
+  * `daily_snapshots(participant_id, study_day, retrievals, engagements, active_day, cumulative_active, on_track, computed_at)`
+  * `send_attempts(participant_id, message_type, mode, status, smtp_response, template_version, created_at)`
+  * `metadata(key, value)` — stores `schema_version` and future flags.
 
 **Messaging & deliverability.**
 
@@ -150,58 +152,82 @@ ADMIN_PASS=choose-a-strong-one
 
 # 3) Database schema (new **mail.db**; SQLite via SQLAlchemy)
 
-**Participants (input from Qualtrics subset)**
+**participants (roster + metadata)**
 
 ```sql
 CREATE TABLE IF NOT EXISTS participants (
-  user_did TEXT PRIMARY KEY,
-  PROLIFIC_ID TEXT,
-  pilot_email TEXT,
-  feed_url TEXT NOT NULL,
-  surveylang TEXT NOT NULL,       -- Dutch | English | Czech | French
-  include_in_emails INTEGER NOT NULL DEFAULT 1,
-  thread_message_id TEXT          -- for inbox threading (seed stored here)
+  participant_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_did TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',   -- active | inactive | unsubscribed
+  type TEXT NOT NULL DEFAULT 'pilot',      -- pilot | prolific | admin | test
+  language TEXT NOT NULL DEFAULT 'en',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_participants_status ON participants(status);
+```
+
+`status='active'` keeps a participant eligible for sends. Use `inactive` for pauses (e.g., manual hold, bounce) and `unsubscribed` for opt-outs; the record remains for audit purposes.
+
+**participant_status_history (audit trail)**
+
+```sql
+CREATE TABLE IF NOT EXISTS participant_status_history (
+  history_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  participant_id INTEGER NOT NULL REFERENCES participants(participant_id) ON DELETE CASCADE,
+  old_status TEXT,
+  new_status TEXT,
+  reason TEXT,
+  changed_by TEXT,
+  changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
-**Compliance snapshots (one row per user per study-day)**
+**daily_snapshots (per-participant study-day metrics)**
 
 ```sql
-CREATE TABLE IF NOT EXISTS compliance_daily (
-  user_did TEXT NOT NULL,
-  study_day_date DATE NOT NULL,   -- local day start (05:00 boundary)
-  retrievals INTEGER NOT NULL,
-  engagements INTEGER NOT NULL,
-  active_day INTEGER NOT NULL,    -- 1 if retrievals>=1 && engagements>=3
-  cumulative_active INTEGER NOT NULL,
-  on_track INTEGER NOT NULL,
-  computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (user_did, study_day_date)
+CREATE TABLE IF NOT EXISTS daily_snapshots (
+  snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  participant_id INTEGER NOT NULL REFERENCES participants(participant_id) ON DELETE CASCADE,
+  study_day DATE NOT NULL,
+  retrievals INTEGER NOT NULL DEFAULT 0,
+  engagements INTEGER NOT NULL DEFAULT 0,
+  active_day INTEGER NOT NULL DEFAULT 0,
+  cumulative_active INTEGER NOT NULL DEFAULT 0,
+  on_track INTEGER NOT NULL DEFAULT 0,
+  computed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(participant_id, study_day)
 );
-CREATE INDEX IF NOT EXISTS idx_cd_user ON compliance_daily(user_did);
+CREATE INDEX IF NOT EXISTS idx_daily_snapshots_day ON daily_snapshots(study_day);
 ```
 
-**Email outbox (audit + idempotency)**
+**send_attempts (outbox audit)**
 
 ```sql
-CREATE TABLE IF NOT EXISTS email_outbox (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_did TEXT NOT NULL,
-  to_address TEXT NOT NULL,
-  subject TEXT NOT NULL,
-  body_html TEXT,
-  body_text TEXT,
-  payload_json TEXT,
+CREATE TABLE IF NOT EXISTS send_attempts (
+  attempt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  participant_id INTEGER NOT NULL REFERENCES participants(participant_id) ON DELETE CASCADE,
+  message_type TEXT NOT NULL,        -- daily_update | onboarding | reminder
+  mode TEXT NOT NULL,                -- dry-run | live
+  status TEXT NOT NULL,              -- sent | failed | skipped
+  smtp_response TEXT,
   template_version TEXT,
-  send_type TEXT NOT NULL,        -- 'daily' | 'manual' | 'seed'
-  in_reply_to TEXT,               -- set for threaded replies
-  references_hdr TEXT,            -- set for threading
-  queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  sent_at TIMESTAMP,
-  status TEXT,                    -- 'queued'|'sent'|'failed'|'skipped'
-  smtp_response TEXT
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_send_attempts_status ON send_attempts(status);
+```
+
+**metadata (key-value store)**
+
+```sql
+CREATE TABLE IF NOT EXISTS metadata (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 ```
+
+Migration helper (`app.mail_db.apply_migrations`) upserts `('schema_version', '<version>')` so upgrades remain idempotent.
 
 You'll continue to read **raw** data from the existing `compliance.db` tables (`engagements`, `feed_requests`, `feed_request_posts`). The mail-updater project only adds a lightweight `mail.db` when we introduce persistent state.
 
@@ -252,8 +278,8 @@ Quasi-code (SQLAlchemy + your raw DB):
 ```python
 def compute_or_update_snapshots(raw_db_path, mail_db_session, cutoff_hour_local, scope):
     # 1) Load participants to know *who* to compute for
-    parts = session.query(Participants).filter_by(include_in_emails=1).all()
-    for p in parts:
+    active_participants = session.query(Participants).filter_by(status="active").all()
+    for p in active_participants:
         # 2) Determine study_start = first feed_requests for user
         first_req = first_feed_request_for_user(raw_db_path, p.user_did)
         if not first_req:
@@ -412,7 +438,7 @@ def imap_append_sent(raw_bytes):
         imap.append(IMAP_SENT_FOLDER, '\\Seen', imaplib.Time2Internaldate(datetime.datetime.now().timetuple()), raw_bytes)
 ```
 
-**Flow:** compose → queue in `email_outbox` → send → append to Sent → update `email_outbox` with `sent_at`, `status='sent'`, `smtp_response`.
+**Flow:** compose → insert a row in `send_attempts` → send → append to Sent → update `send_attempts.status` / `smtp_response`.
 
 ---
 
@@ -430,12 +456,12 @@ def poll_bounces_and_mark_suppressed():
         typ, data = m.fetch(msg_id, '(RFC822)')
         eml = email.message_from_bytes(data[0][1])
         rcpt = extract_failed_rcpt(eml)               # parse DSN
-        mark_participant_suppressed(rcpt)             # include_in_emails=0
+        mark_participant_suppressed(rcpt)             # status='inactive'
         log_bounce(rcpt, raw_headers=eml.items())
         # Optionally move to "Bounces/Processed"
 ```
 
-* **Policy:** on hard bounce, set `include_in_emails=0` and record a row in `email_outbox` as “failed: bounced”. You’ll see it in the dashboard.
+* **Policy:** on hard bounce, set `status='inactive'` and persist a failed `send_attempts` record with reason “bounced” for auditability.
 
 ---
 
@@ -506,10 +532,10 @@ Daily, multilingual compliance updates for the Bluesky Feed Project. Sends one p
 ## Quickstart
 1. `cp .env.template .env` and set SMTP/IMAP/DB settings.
 2. `python3 -m pip install -r requirements.txt`
-3. `python scripts/init_db.py`
+3. `python -m app.cli migrate-mail-db`
 4. Put `data/participants.csv` with columns:
-   - `user_did,PROLIFIC_ID,pilot_email,feed_url,surveylang,include_in_emails`
-5. `python scripts/import_participants.py`
+   - `email,did,status,type,language`
+5. (Optional) `python -m app.cli sync-participants` for Qualtrics import
 6. Build translations (`pybabel extract ... compile ...`) or start with English.
 7. Run once:
    - `python -m app.cli aggregate-daily`
@@ -523,7 +549,7 @@ Daily, multilingual compliance updates for the Bluesky Feed Project. Sends one p
 - `ENGAGEMENT_SCOPE=any|matched`
 
 ## Safety & compliance
-- One email per user per day (idempotent checks in `email_outbox`)
+- One email per user per day (idempotent checks via `send_attempts`)
 - No cohort BCC, one personalized message per recipient
 - DSN-based bounce suppression
 - No PROLIFIC IDs shown in body; Prolific relay addresses used for sending

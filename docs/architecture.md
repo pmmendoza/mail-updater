@@ -40,18 +40,20 @@ _Last updated: 2025-10-20_
 
 ## 2. Data Flow
 
-1. **Qualtrics Sync** fetches survey responses using the v3 API, normalises the roster, and writes `data/participants.csv`.
-2. **Validation** (`validate-participants`) ensures every DID has recent activity in the compliance database and flags duplicates. Participants without recent activity will fall back to a "needs data" template (planned) so messaging can adapt to compliance status.
+1. **Qualtrics Sync** fetches survey responses using the v3 API, normalises the roster, writes into `mail.db` (`participants` table), and exports `data/participants.csv` as a fallback for manual review.
+2. **Validation** (`validate-participants`) ensures every DID has recent activity in the compliance database and flags duplicates. When `mail.db` is present, it can be checked directly; otherwise the command falls back to the CSV.
 3. **Compliance Snapshot** queries SQLite (`COMPLIANCE_DB_PATH`) to calculate 14-day window metrics per DID.
 4. **Email Rendering** uses Jinja templates to produce text/HTML bodies.
 
-5. **Delivery Layer** runs in dry-run (writes `.eml`) or live mode (SMTP) and records results in JSONL.
+5. **Delivery Layer** runs in dry-run (writes `.eml`) or live mode (SMTP), logs attempts to `mail.db.send_attempts`, and records JSONL summaries for quick inspection.
 
 ```mermaid
 flowchart LR
     Q["Qualtrics Surveys"] -->|API export| Sync["Qualtrics Sync CLI"]
-    Sync --> CSV["data/participants.csv"]
-    CSV --> CLI["Mail Updater CLI"]
+    Sync --> MailDB[("mail.db")]
+    Sync --> CSV["data/participants.csv (fallback)"]
+    MailDB --> CLI["Mail Updater CLI"]
+    CSV --> CLI
     DB[("compliance.db")] --> Snapshot["Compliance Snapshot Engine"]
     Snapshot --> CLI
     Fixtures["data/fixtures/compliance_fixture.db"] --> Snapshot

@@ -23,10 +23,30 @@ Last updated: 2025-10-20
    ```
 5. Review log file `outbox/send_log.jsonl` for errors.
 
+## 2.1 Roster & mail.db alignment
+- `python -m app.cli sync-participants` now upserts into `mail.db` first, then rewrites `data/participants.csv` as a backup view.
+- Manual status changes made with `python -m app.cli participant set-status` remain untouched by the sync; Qualtrics data only updates contact metadata unless a brand-new participant is created.
+- The `participant set-status` command also exports the latest roster back to CSV so legacy tooling sees the updated status immediately.
+- After any sync run, rerun `validate-participants` to confirm roster and compliance data stay consistent.
+
+## 2.2 Bounce handling
+- Configure IMAP access in `.env` (`IMAP_HOST`, `IMAP_PORT`, `IMAP_USERNAME`, `IMAP_PASSWORD`, `IMAP_MAILBOX`, `IMAP_USE_SSL`).
+- Run `python -m app.cli bounces-scan` to ingest Delivery Status Notifications (DSNs). Each matched recipient updates the latest `send_attempts` row, flips the participant to `inactive`, and appends a note to the JSONL log.
+- Use `--keep-unseen` if you want to leave processed messages unread for manual inspection.
+- Review unmatched recipients reported by the command and reconcile them (e.g., update participant emails or investigate false positives).
+
 ## 3. Monitoring & Alerts (planned)
-- Track send successes/failures via JSONL log ingestion (e.g., into a dashboard).
-- Monitor SMTP connectivity and credential expiration.
-- Observe Qualtrics sync results (new participants vs. failures).
+- **Delivery dashboards**
+  - Track send successes/failures via JSONL log ingestion or direct `send_attempts` queries (success rate, failure reasons, bounce counts).
+  - Surface latency metrics (`rendered_at` vs `smtp_response`) once timestamps are captured; until then, approximate via CLI run time.
+  - Expose most recent sends with `python -m app.cli status --limit 20` for quick manual review.
+- **Bounce alerts**
+  - Schedule `python -m app.cli bounces-scan` (cron/systemd/GitHub Actions) to poll DSNs at least daily.
+  - Emit notification (email/Slack) when `participants_updated` is non-empty; store unmatched recipients for manual triage.
+- **Roster/Qualtrics monitoring**
+  - Observe Qualtrics sync results (new participants vs. failures) and alert on high failure counts.
+- **Connectivity**
+  - Monitor SMTP/IMAP connectivity and credential expiration (e.g., simple TCP/LOGIN probes with alerting).
 
 ## 4. CI/CD & Deployment Automation Plan
 1. **Continuous Integration**: GitHub Actions workflow runs `make lint` and `make test` on every pull request; artifacts (e.g., dry-run `.eml`) can be attached manually when needed.

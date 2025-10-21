@@ -28,10 +28,30 @@ This directory contains a minimal, working example of the mail updater pipeline.
 4. **Run the CLI**
    ```bash
    python -m app.cli aggregate            # show per-participant status
-   python -m app.cli preview --user-did did:example:123
-   python -m app.cli send-daily --dry-run # writes .eml files to outbox/
-   python -m app.cli validate-participants # confirm roster entries have data
-   ```
+python -m app.cli preview --user-did did:example:123
+python -m app.cli send-daily --dry-run # writes .eml files to outbox/
+python -m app.cli validate-participants # confirm roster entries have data
+python -m app.cli participant set-status --user-did did:example:123 --status inactive --reason "manual hold"
+python -m app.cli status --limit 10 --user-did did:example:123
+python -m app.cli bounces-scan --keep-unseen
+```
+
+The status command updates `mail.db` first and then re-exports `data/participants.csv` so older tooling stays in sync.
+
+### IMAP bounce handling
+
+Add the following entries to `.env` to enable automated bounce suppression:
+
+```
+IMAP_HOST=imap.example.com
+IMAP_PORT=993
+IMAP_USERNAME=<imap user>
+IMAP_PASSWORD=<imap password>
+IMAP_MAILBOX=INBOX  # or the folder where DSNs land
+IMAP_USE_SSL=true
+```
+
+Run `python -m app.cli bounces-scan` to poll the mailbox. The command extracts the bounced recipient, marks the latest send attempt as failed in `mail.db`, and flips the participant status to `inactive` so future sends are suppressed.
 
 ### Local smoke test with bundled fixtures
 
@@ -84,9 +104,10 @@ python -m app.cli sync-participants
 ```
 
 The command talks directly to the Qualtrics export endpoints, merges responses
-from matching surveys, keeps existing participant metadata when available, and
-validates that the resulting file matches the `email,did,status,type` schema used
-throughout the pipeline.
+from matching surveys, upserts the roster into `mail.db` (preserving manual status
+overrides), and rewrites `data/participants.csv` as a mirror of the database.
+It validates that the resulting file matches the `email,did,status,type` schema
+used throughout the pipeline.
 
 ## Testing
 

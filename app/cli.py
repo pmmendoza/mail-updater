@@ -11,11 +11,22 @@ from sqlalchemy import text
 from .config import Settings
 from .compliance_snapshot import WindowSummary, compute_window_summary
 from .db import get_engine
-from .mail_db import apply_migrations
 from .email_renderer import render_daily_progress
+from .bounce_scanner import BounceScannerError, scan_bounces
+from .mail_db import apply_migrations
+from .mail_db.operations import (
+    ALLOWED_STATUSES,
+    InvalidStatusError,
+    ParticipantNotFoundError,
+    export_participants_to_csv,
+    fetch_recent_send_attempts,
+    set_participant_status,
+)
 from .mailer import MailSender
 from .participants import Participant, filter_active, load_participants
 from .qualtrics_sync import QualtricsSyncError, sync_participants_from_qualtrics
+
+DEFAULT_STATUS_CHANGED_BY = "mail-updater-cli"
 
 
 def _load_settings() -> Settings:
@@ -137,7 +148,13 @@ def send_daily_command(dry_run: Optional[bool]) -> None:
         rendered = render_daily_progress(
             summary, participant, subject=settings.mail_subject
         )
-        sender.send(rendered, participant.email, user_did=participant.user_did)
+        sender.send(
+            rendered,
+            participant.email,
+            user_did=participant.user_did,
+            message_type="daily_update",
+            template_version="daily_progress_v1",
+        )
         sent += 1
         mode = "dry-run" if settings.smtp_dry_run else "sent"
         click.echo(f"[{mode}] {participant.user_did} -> {participant.email}")
@@ -205,6 +222,165 @@ def validate_participants_command() -> None:
         )
 
     click.echo("Roster validation successful: all participants have activity.")
+
+
+@cli.group("participant")
+def participant_group() -> None:
+    """Manage participant roster entries stored in mail.db."""
+
+
+@participant_group.command("set-status")
+@click.option(
+    "--user-did",
+    "user_did",
+    required=True,
+    help="Participant DID to update in mail.db.",
+)
+@click.option(
+    "--status",
+    "status",
+    required=True,
+    type=click.Choice(sorted(ALLOWED_STATUSES)),
+    help="New status value (active, inactive, or unsubscribed).",
+)
+@click.option(
+    "--reason",
+    "reason",
+    default=None,
+    help="Optional reason for the status change (stored in history).",
+)
+@click.option(
+    "--changed-by",
+    "changed_by",
+    default=None,
+    help="Optional actor identifier recorded in history (defaults to mail-updater-cli).",
+)
+def participant_set_status_command(
+    user_did: str, status: str, reason: Optional[str], changed_by: Optional[str]
+) -> None:
+    """Update a participant status and record the change in mail.db."""
+    settings = _load_settings()
+    settings.ensure_mail_db_parent()
+    actor = changed_by or DEFAULT_STATUS_CHANGED_BY
+    try:
+        result = set_participant_status(
+            settings.mail_db_path,
+            user_did=user_did,
+            new_status=status,
+            reason=reason,
+            changed_by=actor,
+        )
+    except (InvalidStatusError, ParticipantNotFoundError, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if result.changed:
+        click.echo(
+            f"Status for {result.user_did} updated: {result.old_status} -> {result.new_status}."
+        )
+        if result.reason:
+            click.echo(f"Reason: {result.reason}")
+        if result.changed_by:
+            click.echo(f"Changed by: {result.changed_by}")
+        try:
+            export_participants_to_csv(
+                settings.mail_db_path, settings.participants_csv_path
+            )
+        except Exception as exc:  # pragma: no cover - filesystem edge case
+            raise click.ClickException(
+                f"Failed to update participants CSV: {exc}"
+            ) from exc
+    else:
+        click.echo(
+            f"No change: participant {result.user_did} already has status {result.new_status}."
+        )
+
+
+@cli.command("status")
+@click.option(
+    "--limit", type=int, default=20, help="Number of recent send attempts to show."
+)
+@click.option("--user-did", "user_did", default=None, help="Filter by participant DID.")
+@click.option(
+    "--message-type",
+    "message_type",
+    default=None,
+    help="Filter by message type (e.g., daily_update).",
+)
+def status_command(
+    limit: int, user_did: Optional[str], message_type: Optional[str]
+) -> None:
+    """Display recent send attempts captured in mail.db."""
+
+    settings = _load_settings()
+    attempts = fetch_recent_send_attempts(
+        settings.mail_db_path,
+        limit=limit,
+        user_did=user_did,
+        message_type=message_type,
+    )
+
+    if not attempts:
+        click.echo("No send attempts recorded.")
+        return
+
+    header = f"Recent send attempts (limit {limit})"
+    if user_did:
+        header += f" — user {user_did}"
+    if message_type:
+        header += f" — type {message_type}"
+    click.echo(header)
+
+    columns = [
+        "created_at",
+        "user_did",
+        "message_type",
+        "mode",
+        "status",
+        "smtp_response",
+    ]
+    click.echo(" | ".join(columns))
+    click.echo("-" * 80)
+
+    for attempt in attempts:
+        row = []
+        for column in columns:
+            value = attempt.get(column)
+            if column == "created_at" and value is not None:
+                value = getattr(value, "isoformat", lambda: str(value))()
+            row.append(str(value or ""))
+        click.echo(" | ".join(row))
+
+
+@cli.command("bounces-scan")
+@click.option(
+    "--keep-unseen",
+    is_flag=True,
+    default=False,
+    help="Leave bounce messages unread instead of marking them as seen.",
+)
+def bounces_scan_command(keep_unseen: bool) -> None:
+    """Poll the IMAP bounce mailbox and suppress participants with hard bounces."""
+
+    settings = _load_settings()
+    try:
+        outcome = scan_bounces(settings, mark_seen=not keep_unseen)
+    except BounceScannerError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(
+        f"Bounce scan completed: {outcome.messages_seen} messages, "
+        f"{len(outcome.participants_updated)} participants updated."
+    )
+    if outcome.participants_updated:
+        click.echo(
+            "Participants suppressed: "
+            + ", ".join(sorted(set(outcome.participants_updated)))
+        )
+    if outcome.unmatched_recipients:
+        click.echo(
+            "Unmatched recipients: "
+            + ", ".join(sorted(set(outcome.unmatched_recipients)))
+        )
 
 
 @cli.command("migrate-mail-db")

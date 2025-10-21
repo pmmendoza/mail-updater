@@ -12,6 +12,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.config import Settings  # noqa: E402
+from app.mail_db.migrations import apply_migrations  # noqa: E402
+from app.mail_db.operations import get_mail_db_engine, list_participants  # noqa: E402
+from app.mail_db.schema import participants  # noqa: E402
 from app.qualtrics_sync import (  # noqa: E402
     QualtricsSyncError,
     Survey,
@@ -99,7 +102,7 @@ def test_merge_participants_preserves_existing_metadata() -> None:
     merged = _merge_participants(existing, new_rows)
     merged_by_did = {row["did"]: row for row in merged}
     assert merged_by_did["did:admin"]["type"] == "admin"
-    assert merged_by_did["did:old"]["email"] == "old@example.com"
+    assert merged_by_did["did:old"]["email"] == "updated@example.com"
     assert merged_by_did["did:old"]["status"] == "inactive"
     assert merged_by_did["did:old"]["type"] == "prolific"
     assert merged_by_did["did:new"]["type"] == "prolific"
@@ -114,6 +117,19 @@ def test_sync_participants_from_qualtrics_updates_csv(
         "philipp.m.mendoza@gmail.com,did:plc:admin,active,admin\n",
         encoding="utf-8",
     )
+    mail_db_path = tmp_path / "mail.sqlite"
+    apply_migrations(mail_db_path)
+    engine = get_mail_db_engine(mail_db_path)
+    with engine.begin() as conn:
+        conn.execute(
+            participants.insert().values(
+                user_did="did:plc:admin",
+                email="philipp.m.mendoza@gmail.com",
+                status="inactive",
+                type="admin",
+                language="en",
+            )
+        )
 
     surveys = [Survey(survey_id="SV_1", name="NEWSFLOWS_pretreat_v1.0")]
     responses = {
@@ -125,6 +141,7 @@ def test_sync_participants_from_qualtrics_updates_csv(
 
     settings = Settings().with_overrides(
         participants_csv_path=csv_path,
+        mail_db_path=mail_db_path,
         qualtrics_base_url="eu.qualtrics.com",
         qualtrics_api_token="token",
         qualtrics_survey_filter="NEWSFLOWS",
@@ -133,11 +150,17 @@ def test_sync_participants_from_qualtrics_updates_csv(
     stub = StubClient(surveys, responses)
     result = sync_participants_from_qualtrics(settings, client=stub)
 
+    roster = list_participants(mail_db_path)
+    roster_by_did = {row["did"]: row for row in roster}
+    assert roster_by_did["did:plc:admin"]["status"] == "inactive"
+    assert roster_by_did["did:plc:admin"]["email"] == "philipp@example.com"
+    assert roster_by_did["did:new"]["email"] == "person@example.com"
+    assert roster_by_did["did:new"]["status"] == "active"
+
     output = csv_path.read_text(encoding="utf-8")
     assert "person@example.com" in output
-    assert "philipp.m.mendoza@gmail.com" in output
-    # type/admin preserved
-    assert "admin" in output
+    assert "philipp@example.com" in output
+    assert "inactive" in output  # manual override preserved
     assert result.added_participants == 1
     assert result.total_participants == 2
     assert result.surveys_considered == 1
@@ -161,9 +184,23 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
         "email,did,status,type\n" "person@example.com,did:123,active,pilot\n",
         encoding="utf-8",
     )
+    mail_db_path = tmp_path / "mail.sqlite"
+    apply_migrations(mail_db_path)
+    engine = get_mail_db_engine(mail_db_path)
+    with engine.begin() as conn:
+        conn.execute(
+            participants.insert().values(
+                user_did="did:123",
+                email="person@example.com",
+                status="inactive",
+                type="pilot",
+                language="en",
+            )
+        )
 
     settings = Settings().with_overrides(
         participants_csv_path=csv_path,
+        mail_db_path=mail_db_path,
         qualtrics_base_url="eu.qualtrics.com",
         qualtrics_api_token="token",
         qualtrics_survey_filter="NEWSFLOWS",
@@ -172,7 +209,19 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
     stub = StubClient([], {})
     result = sync_participants_from_qualtrics(settings, client=stub)
 
-    assert csv_path.read_text(encoding="utf-8").count("person@example.com") == 1
+    output = csv_path.read_text(encoding="utf-8")
+    assert output.count("person@example.com") == 1
+    assert "inactive" in output
+    roster = list_participants(mail_db_path)
+    assert roster == [
+        {
+            "did": "did:123",
+            "email": "person@example.com",
+            "status": "inactive",
+            "type": "pilot",
+            "language": "en",
+        }
+    ]
     assert result.added_participants == 0
     assert result.total_participants == 1
     assert result.surveys_considered == 0
