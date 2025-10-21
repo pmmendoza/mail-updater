@@ -34,6 +34,11 @@ Last updated: 2025-10-20
 3. **Scheduled Deployment**: Default approach is a local cron/systemd timer on the operator laptop or research VM. Keep a reference GitHub Actions workflow for later automation, but do not trigger it by default.
 4. **Approvals**: Require manual approval before enabling live send in any automated schedule; keep dry-run as default guardrail.
 5. **Rollback**: Re-run previous git SHA; keep fixture data handy to reproduce issues locally.
+6. **Metrics & Logging Enhancements**:
+   - Track proportion of successful deliveries vs failures using `send_log.jsonl` and planned mail.db `send_attempts` table.
+   - Record delivery latency (compute timestamps at render vs SMTP send).
+   - Summarise metrics weekly and review with stakeholders (automation TBD).
+   - Backlog: integrate with Grafana/Looker once infrastructure is ready.
 
 ## 5. Incident Response
 - **Validation failure**: review CLI output, cross-check participant roster for typos, fix compliance data.
