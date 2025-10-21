@@ -159,5 +159,16 @@
     ],
     "preflight": "PASS",
     "branch": "main"
+  },
+  {
+    "ts": "2025-10-21T09:16:36Z",
+    "task": "Mermaid architecture diagram",
+    "files": [
+      "docs/architecture.md",
+      "README.md",
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "PASS",
+    "branch": "main"
   }
 ]

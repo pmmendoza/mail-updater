@@ -64,6 +64,7 @@ activity, and emit a dry-run email under `outbox/`.
 - `app/templates/email/` — plain text and HTML email templates.
 - `scripts/mvp_check.sh` — quick smoke test (aggregate + dry-run send).
 - `participants-updater.R` — legacy tidyverse helper (kept as reference only).
+- `docs/architecture.md` — detailed architecture notes with mermaid diagram of data flow.
 
 ### Qualtrics participant sync
 
