@@ -49,18 +49,18 @@ _Last updated: 2025-10-20_
 
 ```mermaid
 flowchart LR
-    Q[Qualtrics Surveys] -->|API export| Sync[Qualtrics Sync CLI]
-    Sync --> CSV[data/participants.csv]
-    CSV --> CLI[Mail Updater CLI]
-    DB[(compliance.db)] --> Snapshot[Compliance Snapshot Engine]
+    Q["Qualtrics Surveys"] -->|API export| Sync["Qualtrics Sync CLI"]
+    Sync --> CSV["data/participants.csv"]
+    CSV --> CLI["Mail Updater CLI"]
+    DB[("compliance.db")] --> Snapshot["Compliance Snapshot Engine"]
     Snapshot --> CLI
-    Fixtures[data/fixtures/compliance_fixture.db] --> Snapshot
-    CLI --> Renderer[Email Renderer (Jinja2)]
-    Renderer --> Mailer[SMTP Mailer]
-    Mailer -->|dry-run| Outbox[outbox/*.eml]
-    Mailer -->|log| Log[send_log.jsonl]
-    Mailer -->|live send| SMTP[(SMTP Server)]
-    CLI --> Validate[validate-participants]
+    Fixtures["data/fixtures/compliance_fixture.db"] --> Snapshot
+    CLI --> Renderer["Email Renderer (Jinja2)"]
+    Renderer --> Mailer["SMTP Mailer"]
+    Mailer -->|dry-run| Outbox["outbox/*.eml"]
+    Mailer -->|log| Log["send_log.jsonl"]
+    Mailer -->|live send| SMTP["SMTP Server"]
+    CLI --> Validate["validate-participants"]
     Validate --> Log
 ```
 
