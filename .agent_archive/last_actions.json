@@ -150,5 +150,14 @@
     ],
     "preflight": "PASS",
     "branch": "main"
+  },
+  {
+    "ts": "2025-10-21T08:52:48Z",
+    "task": "Ops docs deployment workflow",
+    "files": [
+      "docs/operations.md"
+    ],
+    "preflight": "PASS",
+    "branch": "main"
   }
 ]
