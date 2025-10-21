@@ -22,7 +22,7 @@ from .mail_db.operations import (
     upsert_participants,
 )
 
-REQUIRED_HEADERS = ["email", "did", "status", "type"]
+REQUIRED_HEADERS = ["email", "did", "status", "type", "feed_url"]
 PROLIFIC_TYPE = "prolific"
 
 
@@ -53,6 +53,8 @@ class SyncResult:
     responses_processed: int
     total_participants: int
     added_participants: int
+    quarantined_dids: List[str]
+    quarantine_path: Optional[Path]
 
 
 class QualtricsClient:
@@ -183,6 +185,7 @@ def _write_csv(csv_path: Path, rows: Iterable[Dict[str, str]]) -> None:
                     "status": (row.get("status") or DEFAULT_STATUS).strip()
                     or DEFAULT_STATUS,
                     "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
+                    "feed_url": (row.get("feed_url") or "").strip(),
                 }
             )
 
@@ -197,19 +200,35 @@ def _first_nonempty(row: Dict[str, str], *keys: str) -> Optional[str]:
     return None
 
 
-def _rows_from_responses(responses: Iterable[Dict[str, str]]) -> List[Dict[str, str]]:
+def _rows_from_responses(
+    responses: Iterable[Dict[str, str]],
+) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
     participants: Dict[str, Dict[str, str]] = {}
+    quarantine: List[Dict[str, str]] = []
     for response in responses:
         did = _first_nonempty(response, "did", "bs_did", "user_did", "DID")
-        if not did:
-            continue
-
         email = _first_nonempty(response, "email", "Email", "EmailAddress")
         prolific_id = _first_nonempty(response, "PROLIFIC_ID", "prolific_id")
+        feed_url = _first_nonempty(
+            response,
+            "feed_url",
+            "Feed URL",
+            "feedUrl",
+            "assigned_feed_url",
+            "Assigned Feed URL",
+        )
+
         if not email and prolific_id:
             email = f"{prolific_id}@email.prolific.com"
 
-        if not email:
+        if not did or not email or not feed_url:
+            quarantine.append(
+                {
+                    "did": did or "",
+                    "email": email or "",
+                    "feed_url": feed_url or "",
+                }
+            )
             continue
 
         participant_type = PROLIFIC_TYPE if prolific_id else DEFAULT_TYPE
@@ -223,6 +242,8 @@ def _rows_from_responses(responses: Iterable[Dict[str, str]]) -> List[Dict[str, 
                 and participant_type == PROLIFIC_TYPE
             ):
                 existing["type"] = participant_type
+            if feed_url:
+                existing["feed_url"] = feed_url
             continue
 
         participants[did] = {
@@ -230,9 +251,10 @@ def _rows_from_responses(responses: Iterable[Dict[str, str]]) -> List[Dict[str, 
             "did": did,
             "status": DEFAULT_STATUS,
             "type": participant_type,
+            "feed_url": feed_url,
         }
 
-    return list(participants.values())
+    return list(participants.values()), quarantine
 
 
 def _merge_participants(
@@ -248,6 +270,7 @@ def _merge_participants(
             "did": did.strip(),
             "status": (row.get("status") or DEFAULT_STATUS).strip() or DEFAULT_STATUS,
             "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
+            "feed_url": (row.get("feed_url") or "").strip(),
         }
 
     for row in new_rows:
@@ -268,6 +291,9 @@ def _merge_participants(
                 record["type"] = new_type
             elif record.get("type") == DEFAULT_TYPE and new_type == PROLIFIC_TYPE:
                 record["type"] = new_type
+            new_feed_url = (row.get("feed_url") or "").strip()
+            if new_feed_url and new_feed_url != record.get("feed_url"):
+                record["feed_url"] = new_feed_url
         else:
             merged[did] = {
                 "email": row.get("email", "").strip(),
@@ -275,6 +301,7 @@ def _merge_participants(
                 "status": (row.get("status") or DEFAULT_STATUS).strip()
                 or DEFAULT_STATUS,
                 "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
+                "feed_url": (row.get("feed_url") or "").strip(),
             }
 
     return sorted(merged.values(), key=lambda item: item["email"])
@@ -333,13 +360,25 @@ def sync_participants_from_qualtrics(
             responses_processed=0,
             total_participants=total_participants,
             added_participants=0,
+            quarantined_dids=[],
+            quarantine_path=None,
         )
 
     responses: List[Dict[str, str]] = []
     for survey in surveys:
         responses.extend(client.fetch_responses(survey.survey_id))
 
-    new_rows = _rows_from_responses(responses)
+    new_rows, quarantined = _rows_from_responses(responses)
+    quarantine_path: Optional[Path] = None
+    if quarantined:
+        quarantine_path = csv_path.parent / "qualtrics_quarantine.csv"
+        quarantine_path.parent.mkdir(parents=True, exist_ok=True)
+        with quarantine_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["email", "did", "feed_url"])
+            writer.writeheader()
+            for row in quarantined:
+                writer.writerow(row)
+
     if not new_rows:
         if existing_db_rows:
             _write_csv(csv_path, existing_db_rows)
@@ -352,6 +391,10 @@ def sync_participants_from_qualtrics(
             responses_processed=len(responses),
             total_participants=total_participants,
             added_participants=0,
+            quarantined_dids=sorted(
+                {row.get("did", "") for row in quarantined if row.get("did")}
+            ),
+            quarantine_path=quarantine_path,
         )
 
     merged = _merge_participants(existing_rows, new_rows)
@@ -368,4 +411,8 @@ def sync_participants_from_qualtrics(
         responses_processed=len(responses),
         total_participants=upsert_result.total,
         added_participants=upsert_result.inserted,
+        quarantined_dids=sorted(
+            {row.get("did", "") for row in quarantined if row.get("did")}
+        ),
+        quarantine_path=quarantine_path,
     )

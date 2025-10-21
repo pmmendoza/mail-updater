@@ -40,31 +40,48 @@ class StubClient:
 
 def test_rows_from_responses_extracts_unique_participants() -> None:
     responses = [
-        {"email": "a@example.com", "bs_did": "did:one", "PROLIFIC_ID": "123"},
+        {
+            "email": "a@example.com",
+            "bs_did": "did:one",
+            "PROLIFIC_ID": "123",
+            "feed_url": "https://feeds.example.com/one",
+        },
         {"email": "", "bs_did": "did:one", "PROLIFIC_ID": "123"},
-        {"email": "b@example.com", "did": "did:two"},
+        {
+            "email": "b@example.com",
+            "did": "did:two",
+            "feed_url": "https://feeds.example.com/two",
+        },
         {"prolific_id": "789", "did": "did:three"},
     ]
 
-    rows = _rows_from_responses(responses)
+    rows, quarantine = _rows_from_responses(responses)
     assert rows == [
         {
             "email": "a@example.com",
             "did": "did:one",
             "status": "active",
             "type": "prolific",
+            "feed_url": "https://feeds.example.com/one",
         },
         {
             "email": "b@example.com",
             "did": "did:two",
             "status": "active",
             "type": "pilot",
+            "feed_url": "https://feeds.example.com/two",
+        },
+    ]
+    assert quarantine == [
+        {
+            "did": "did:one",
+            "email": "123@email.prolific.com",
+            "feed_url": "",
         },
         {
             "email": "789@email.prolific.com",
             "did": "did:three",
-            "status": "active",
-            "type": "prolific",
+            "feed_url": "",
         },
     ]
 
@@ -76,12 +93,14 @@ def test_merge_participants_preserves_existing_metadata() -> None:
             "did": "did:admin",
             "status": "active",
             "type": "admin",
+            "feed_url": "https://feeds.example.com/admin",
         },
         {
             "email": "old@example.com",
             "did": "did:old",
             "status": "inactive",
             "type": "pilot",
+            "feed_url": "https://feeds.example.com/old",
         },
     ]
     new_rows = [
@@ -90,12 +109,14 @@ def test_merge_participants_preserves_existing_metadata() -> None:
             "did": "did:new",
             "status": "active",
             "type": "prolific",
+            "feed_url": "https://feeds.example.com/new",
         },
         {
             "email": "updated@example.com",
             "did": "did:old",
             "status": "active",
             "type": "prolific",
+            "feed_url": "https://feeds.example.com/updated",
         },
     ]
 
@@ -106,6 +127,7 @@ def test_merge_participants_preserves_existing_metadata() -> None:
     assert merged_by_did["did:old"]["status"] == "inactive"
     assert merged_by_did["did:old"]["type"] == "prolific"
     assert merged_by_did["did:new"]["type"] == "prolific"
+    assert merged_by_did["did:old"]["feed_url"] == "https://feeds.example.com/updated"
 
 
 def test_sync_participants_from_qualtrics_updates_csv(
@@ -113,8 +135,8 @@ def test_sync_participants_from_qualtrics_updates_csv(
 ) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type\n"
-        "philipp.m.mendoza@gmail.com,did:plc:admin,active,admin\n",
+        "email,did,status,type,feed_url\n"
+        "philipp.m.mendoza@gmail.com,did:plc:admin,active,admin,https://feeds.example.com/admin\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"
@@ -128,14 +150,24 @@ def test_sync_participants_from_qualtrics_updates_csv(
                 status="inactive",
                 type="admin",
                 language="en",
+                feed_url="https://feeds.example.com/admin",
             )
         )
 
     surveys = [Survey(survey_id="SV_1", name="NEWSFLOWS_pretreat_v1.0")]
     responses = {
         "SV_1": [
-            {"email": "person@example.com", "bs_did": "did:new", "PROLIFIC_ID": "123"},
-            {"email": "philipp@example.com", "bs_did": "did:plc:admin"},
+            {
+                "email": "person@example.com",
+                "bs_did": "did:new",
+                "PROLIFIC_ID": "123",
+                "feed_url": "https://feeds.example.com/new",
+            },
+            {
+                "email": "philipp@example.com",
+                "bs_did": "did:plc:admin",
+                "feed_url": "https://feeds.example.com/admin",
+            },
         ]
     }
 
@@ -156,15 +188,20 @@ def test_sync_participants_from_qualtrics_updates_csv(
     assert roster_by_did["did:plc:admin"]["email"] == "philipp@example.com"
     assert roster_by_did["did:new"]["email"] == "person@example.com"
     assert roster_by_did["did:new"]["status"] == "active"
+    assert roster_by_did["did:new"].get("feed_url") == "https://feeds.example.com/new"
 
     output = csv_path.read_text(encoding="utf-8")
     assert "person@example.com" in output
     assert "philipp@example.com" in output
     assert "inactive" in output  # manual override preserved
+    assert "feed_url" in output
+    assert "https://feeds.example.com/new" in output
     assert result.added_participants == 1
     assert result.total_participants == 2
     assert result.surveys_considered == 1
     assert result.responses_processed == 2
+    assert result.quarantined_dids == []
+    assert result.quarantine_path is None
 
 
 def test_sync_participants_requires_credentials(tmp_path: Path) -> None:
@@ -181,7 +218,8 @@ def test_sync_participants_requires_credentials(tmp_path: Path) -> None:
 def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type\n" "person@example.com,did:123,active,pilot\n",
+        "email,did,status,type,feed_url\n"
+        "person@example.com,did:123,active,pilot,https://feeds.example.com/123\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"
@@ -195,6 +233,7 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
                 status="inactive",
                 type="pilot",
                 language="en",
+                feed_url="https://feeds.example.com/123",
             )
         )
 
@@ -220,9 +259,58 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
             "status": "inactive",
             "type": "pilot",
             "language": "en",
+            "feed_url": "https://feeds.example.com/123",
         }
     ]
     assert result.added_participants == 0
     assert result.total_participants == 1
     assert result.surveys_considered == 0
     assert result.responses_processed == 0
+    assert result.quarantined_dids == []
+    assert result.quarantine_path is None
+
+
+def test_sync_participants_writes_quarantine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_path = tmp_path / "participants.csv"
+    csv_path.write_text(
+        "email,did,status,type,feed_url\n",
+        encoding="utf-8",
+    )
+    mail_db_path = tmp_path / "mail.sqlite"
+    apply_migrations(mail_db_path)
+
+    surveys = [Survey(survey_id="SV_1", name="NEWSFLOWS_pretreat_v1.0")]
+    responses = {
+        "SV_1": [
+            {
+                "email": "valid@example.com",
+                "did": "did:valid",
+                "feed_url": "https://feeds.example.com/valid",
+            },
+            {
+                "email": "invalid@example.com",
+                "did": "",
+                "feed_url": "",
+            },
+        ]
+    }
+
+    settings = Settings().with_overrides(
+        participants_csv_path=csv_path,
+        mail_db_path=mail_db_path,
+        qualtrics_base_url="eu.qualtrics.com",
+        qualtrics_api_token="token",
+    )
+
+    stub = StubClient(surveys, responses)
+    result = sync_participants_from_qualtrics(settings, client=stub)
+
+    assert result.quarantined_dids == []  # missing DID so excluded from set
+    assert result.quarantine_path is not None
+    assert result.quarantine_path.exists()
+    quarantine_contents = result.quarantine_path.read_text(encoding="utf-8")
+    assert "invalid@example.com" in quarantine_contents
+    roster = list_participants(mail_db_path)
+    assert any(row["did"] == "did:valid" for row in roster)

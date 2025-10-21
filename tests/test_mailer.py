@@ -34,6 +34,7 @@ def test_mail_sender_records_send_attempt(tmp_path: Path) -> None:
                 status="active",
                 type="pilot",
                 language="en",
+                feed_url="https://feeds.example.com/mailer",
             )
         )
 

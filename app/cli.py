@@ -36,7 +36,10 @@ def _load_settings() -> Settings:
 
 
 def _load_participant_map(csv_path: Path, mail_db_path: Path) -> dict[str, Participant]:
-    participants = load_participants(csv_path, mail_db_path=mail_db_path)
+    try:
+        participants = load_participants(csv_path, mail_db_path=mail_db_path)
+    except FileNotFoundError as exc:
+        raise click.ClickException(str(exc)) from exc
     return {p.user_did: p for p in participants}
 
 
@@ -192,6 +195,11 @@ def sync_participants_command(survey_filter: Optional[str]) -> None:
         f"{result.added_participants} new / {result.total_participants} total entries "
         f"across {result.surveys_considered} surveys."
     )
+    if result.quarantined_dids:
+        quarantine_msg = f"Quarantined {len(result.quarantined_dids)} unique DID(s)."
+        if result.quarantine_path:
+            quarantine_msg += f" Details saved to {result.quarantine_path}."
+        click.echo(quarantine_msg)
 
 
 @cli.command("validate-participants")
@@ -336,13 +344,12 @@ def participant_import_csv_command() -> None:
                     "status": (raw.get("status") or "active").strip(),
                     "type": (raw.get("type") or "pilot").strip(),
                     "language": (raw.get("language") or "en").strip() or "en",
+                    "feed_url": (raw.get("feed_url") or "").strip(),
                 }
             )
 
     if not rows:
-        raise click.ClickException(
-            "No valid rows found in participants CSV to import."
-        )
+        raise click.ClickException("No valid rows found in participants CSV to import.")
 
     result = upsert_participants(settings.mail_db_path, rows)
     export_participants_to_csv(settings.mail_db_path, settings.participants_csv_path)

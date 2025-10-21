@@ -14,7 +14,7 @@ def test_participants_csv_integrity() -> None:
 
     with csv_path.open(newline="") as handle:
         reader = csv.DictReader(handle)
-        assert reader.fieldnames == ["email", "did", "status", "type"]
+        assert reader.fieldnames == ["email", "did", "status", "type", "feed_url"]
         rows = list(reader)
 
     assert rows, "participants.csv must include at least one participant"
@@ -52,12 +52,14 @@ def test_load_participants_prefers_mail_db(tmp_path: Path) -> None:
                 status="inactive",
                 type="pilot",
                 language="nl",
+                feed_url="https://feeds.example.com/db",
             )
         )
 
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type\n" "csv@example.com,did:csv:1,active,pilot\n",
+        "email,did,status,type,feed_url\n"
+        "csv@example.com,did:csv:1,active,pilot,https://feeds.example.com/csv\n",
         encoding="utf-8",
     )
 
@@ -67,3 +69,4 @@ def test_load_participants_prefers_mail_db(tmp_path: Path) -> None:
     assert participant.email == "db@example.com"
     assert participant.language == "nl"
     assert participant.include_in_emails is False
+    assert participant.feed_url == "https://feeds.example.com/db"

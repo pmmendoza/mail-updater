@@ -92,6 +92,7 @@ def list_participants(db_path: Path) -> List[dict[str, str]]:
                 "status": row.get("status", DEFAULT_STATUS),
                 "type": row.get("type", DEFAULT_TYPE),
                 "language": row.get("language", DEFAULT_LANGUAGE),
+                "feed_url": row.get("feed_url", ""),
             }
         )
 
@@ -126,7 +127,9 @@ def export_participants_to_csv(db_path: Path, csv_path: Path) -> None:
     rows = list_participants(db_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=["email", "did", "status", "type"])
+        writer = csv.DictWriter(
+            handle, fieldnames=["email", "did", "status", "type", "feed_url"]
+        )
         writer.writeheader()
         for row in rows:
             writer.writerow(
@@ -135,6 +138,7 @@ def export_participants_to_csv(db_path: Path, csv_path: Path) -> None:
                     "did": row.get("did", ""),
                     "status": row.get("status", DEFAULT_STATUS),
                     "type": row.get("type", DEFAULT_TYPE),
+                    "feed_url": row.get("feed_url", ""),
                 }
             )
 
@@ -175,6 +179,7 @@ def upsert_participants(
             status_value = (
                 record.get("status") or DEFAULT_STATUS
             ).strip() or DEFAULT_STATUS
+            new_feed_url = (record.get("feed_url") or "").strip()
 
             existing = existing_map.get(user_did)
             if existing:
@@ -190,6 +195,9 @@ def upsert_participants(
                     existing.get("language") or DEFAULT_LANGUAGE
                 ):
                     update_values["language"] = new_language
+
+                if new_feed_url and new_feed_url != (existing.get("feed_url") or ""):
+                    update_values["feed_url"] = new_feed_url
 
                 if update_values:
                     update_values["updated_at"] = func.now()
@@ -211,6 +219,7 @@ def upsert_participants(
                         status=status_value,
                         type=new_type,
                         language=new_language,
+                        feed_url=new_feed_url or None,
                     )
                 )
                 inserted += 1

@@ -1,2 +1,2 @@
-email,did,status,type
-philipp.m.mendoza@gmail.com,did:plc:3vomhawgkjhtvw4euuxbll3r,active,admin
+email,did,status,type,feed_url
+philipp.m.mendoza@gmail.com,did:plc:3vomhawgkjhtvw4euuxbll3r,active,admin,https://feeds.example.com/admin

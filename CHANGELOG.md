@@ -5,8 +5,15 @@
 - tests: make lint; make test; python -m app.cli validate-participants; python -m app.cli send-daily --dry-run
 - next: human → review changes, commit, and plan next iteration
 
-- branch: main
+## COMMITTED — 2025-10-21 19:36 (agent)
+- commit: f372ee5
 - files: app/cli.py, app/config.py, app/email_renderer.py, app/bounce_scanner.py, app/mail_db/operations.py, app/participants.py, app/templates/email/daily_progress*.j2, docs/operations.md, docs/email_templates.md, docs/mail_db_schema.md, README.md, CHANGELOG.md, tests/test_cli_status.py, tests/test_bounce_scanner.py, tests/test_email_renderer.py, tests/test_participants.py
 - summary: Added status CLI and bounce scanner, refreshed mail.db helpers, introduced non-compliance email variant, and made participants loader prefer mail.db with supporting docs/tests.
 - tests: make lint; make test
-- next: human → review diff, commit locally, and push or open PR
+
+## PREPARE-COMMIT — 2025-10-21 19:48 (agent)
+- branch: main
+- files: app/cli.py, app/participants.py, README.md, docs/operations.md, tests/test_cli_participant.py, tests/test_participants.py
+- summary: Added `participant import-csv` command and made all CLI commands read participants from mail.db with CSV fallback; docs/tests updated accordingly.
+- tests: make lint; make test
+- next: human → review changes, commit, push

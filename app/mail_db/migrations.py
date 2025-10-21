@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Dict
 
-from sqlalchemy import create_engine, inspect, select
+from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Connection
 
@@ -20,8 +20,19 @@ def _migration_001(conn: Connection) -> None:
     metadata.create_all(conn)
 
 
+def _migration_002(conn: Connection) -> None:
+    """Add feed_url column to participants table."""
+    existing_cols = {
+        row[1]
+        for row in conn.exec_driver_sql("PRAGMA table_info(participants)").fetchall()
+    }
+    if "feed_url" not in existing_cols:
+        conn.execute(text("ALTER TABLE participants ADD COLUMN feed_url TEXT"))
+
+
 MIGRATIONS: Dict[int, MigrationFn] = {
     1: _migration_001,
+    2: _migration_002,
 }
 
 

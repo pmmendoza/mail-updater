@@ -38,6 +38,7 @@ def test_apply_migrations_creates_schema(tmp_path) -> None:
             "language",
             "created_at",
             "updated_at",
+            "feed_url",
         } <= participant_columns
 
         schema_version = conn.execute(

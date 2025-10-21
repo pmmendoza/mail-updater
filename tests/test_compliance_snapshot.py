@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import List, Optional
 import sys
 
 from sqlalchemy import create_engine, text
@@ -38,7 +39,8 @@ def _make_engine():
                 """
                 CREATE TABLE engagements (
                     did_engagement TEXT,
-                    timestamp TEXT
+                    timestamp TEXT,
+                    engagement_type TEXT
                 )
                 """
             )
@@ -47,7 +49,13 @@ def _make_engine():
 
 
 def _insert_activity(
-    engine, *, did: str, day_offset: int, retrievals: int, engagements: int
+    engine,
+    *,
+    did: str,
+    day_offset: int,
+    retrievals: int,
+    engagements: int,
+    engagement_types: Optional[List[str]] = None,
 ) -> None:
     base = datetime(2025, 1, 1, 9, 0, tzinfo=timezone.utc)
     with engine.begin() as conn:
@@ -61,20 +69,46 @@ def _insert_activity(
             )
         for _ in range(engagements):
             ts = base + timedelta(days=day_offset, minutes=5)
+            etype = None
+            if engagement_types:
+                etype = engagement_types[_ % len(engagement_types)]
+            else:
+                etype = "like"
             conn.execute(
                 text(
-                    "INSERT INTO engagements (did_engagement, timestamp) VALUES (:did, :ts)"
+                    "INSERT INTO engagements (did_engagement, timestamp, engagement_type) VALUES (:did, :ts, :etype)"
                 ),
-                {"did": did, "ts": ts.isoformat()},
+                {"did": did, "ts": ts.isoformat(), "etype": etype},
             )
 
 
 def test_compute_window_summary_on_track() -> None:
     engine = _make_engine()
     did = "did:ontrack"
-    _insert_activity(engine, did=did, day_offset=0, retrievals=1, engagements=3)
-    _insert_activity(engine, did=did, day_offset=2, retrievals=1, engagements=3)
-    _insert_activity(engine, did=did, day_offset=3, retrievals=1, engagements=3)
+    _insert_activity(
+        engine,
+        did=did,
+        day_offset=0,
+        retrievals=1,
+        engagements=3,
+        engagement_types=["like", "reply", "repost"],
+    )
+    _insert_activity(
+        engine,
+        did=did,
+        day_offset=2,
+        retrievals=1,
+        engagements=3,
+        engagement_types=["like", "repost"],
+    )
+    _insert_activity(
+        engine,
+        did=did,
+        day_offset=3,
+        retrievals=1,
+        engagements=3,
+        engagement_types=["reply"],
+    )
 
     settings = Settings().with_overrides(
         tz="UTC",
@@ -89,6 +123,10 @@ def test_compute_window_summary_on_track() -> None:
     assert summary.active_days == 3
     assert summary.on_track is True
     assert summary.snapshots[-1].active_day is True
+    first_day_breakdown = summary.snapshots[0].engagement_breakdown
+    assert first_day_breakdown.get("like") == 1
+    assert first_day_breakdown.get("reply") == 1
+    assert first_day_breakdown.get("repost") == 1
 
 
 def test_compute_window_summary_off_track() -> None:

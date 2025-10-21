@@ -27,6 +27,7 @@ def _seed_participant(db_path: Path, *, user_did: str, email: str) -> None:
                 status="active",
                 type="pilot",
                 language="en",
+                feed_url=f"https://feeds.example.com/{user_did.split(':')[-1]}",
             )
         )
 
@@ -57,9 +58,9 @@ def test_cli_status_lists_recent_attempts(tmp_path, monkeypatch) -> None:
 
     # ensure CSV exists so status can export if needed
     csv_path.write_text(
-        "email,did,status,type\n"
-        "one@example.com,did:one,active,pilot\n"
-        "two@example.com,did:two,active,pilot\n",
+        "email,did,status,type,feed_url\n"
+        "one@example.com,did:one,active,pilot,https://feeds.example.com/one\n"
+        "two@example.com,did:two,active,pilot,https://feeds.example.com/two\n",
         encoding="utf-8",
     )
 
@@ -105,7 +106,8 @@ def test_cli_status_with_filters(tmp_path, monkeypatch) -> None:
     )
 
     csv_path.write_text(
-        "email,did,status,type\n" "three@example.com,did:three,active,pilot\n",
+        "email,did,status,type,feed_url\n"
+        "three@example.com,did:three,active,pilot,https://feeds.example.com/three\n",
         encoding="utf-8",
     )
 

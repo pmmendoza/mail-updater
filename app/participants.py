@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
-import csv
 
 from .mail_db.operations import list_participants
 
@@ -16,6 +15,7 @@ class Participant:
     email: str
     language: str = "en"
     include_in_emails: bool = True
+    feed_url: Optional[str] = None
 
 
 def _to_bool(value: str) -> bool:
@@ -58,66 +58,23 @@ def load_participants(
                 language = (row.get("language") or "en").strip() or "en"
                 status = (row.get("status") or "active").strip().lower()
                 include_flag = status == "active"
+                feed_url = (row.get("feed_url") or "").strip() or None
                 roster.append(
                     Participant(
                         user_did=user_did,
                         email=email,
                         language=language,
                         include_in_emails=include_flag,
+                        feed_url=feed_url,
                     )
                 )
             if roster:
                 return roster
 
-    if not csv_path.exists():
-        raise FileNotFoundError(
-            f"Participants CSV not found at {csv_path}. "
-            "Create the file with columns email,did,status,type."
-        )
-
-    participants: List[Participant] = []
-    with csv_path.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-
-        fieldnames = set(reader.fieldnames or [])
-        if {"email", "did"} <= fieldnames and "status" in fieldnames:
-            required_fields = {"email", "did", "status", "type"}
-            schema = "new"
-        else:
-            required_fields = {"user_did", "email"}
-            schema = "legacy"
-
-        missing = required_fields - fieldnames
-        if missing:
-            raise ValueError(
-                f"Participants CSV missing required columns: {', '.join(sorted(missing))}"
-            )
-
-        for row in reader:
-            if schema == "new":
-                user_did = (row.get("did") or "").strip()
-                email = (row.get("email") or "").strip()
-                if not user_did or not email:
-                    continue
-                include_flag = _status_to_bool(row.get("status"))
-                language = _normalize_language(row.get("language"))
-            else:
-                user_did = (row.get("user_did") or "").strip()
-                email = (row.get("email") or "").strip()
-                if not user_did or not email:
-                    continue
-                language = _normalize_language(row.get("language"))
-                include_flag = _to_bool(row.get("include_in_emails", "1"))
-
-            participants.append(
-                Participant(
-                    user_did=user_did,
-                    email=email,
-                    language=language,
-                    include_in_emails=include_flag,
-                )
-            )
-    return participants
+    raise FileNotFoundError(
+        "No participants found in mail.db. Run `participant import-csv` or "
+        "`sync-participants` to seed the roster."
+    )
 
 
 def filter_active(participants: Iterable[Participant]) -> List[Participant]:

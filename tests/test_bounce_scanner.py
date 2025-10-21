@@ -87,6 +87,7 @@ def _seed_participant_and_attempt(
                 status="active",
                 type="pilot",
                 language="en",
+                feed_url="https://feeds.example.com/bounce",
             )
         )
     record_send_attempt(

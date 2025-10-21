@@ -24,16 +24,23 @@ from app.mail_db.operations import (
 from app.mail_db.schema import participant_status_history, participants, send_attempts
 
 
-def _seed_participant(db_path: Path, *, status: str = "active") -> None:
+def _seed_participant(
+    db_path: Path,
+    *,
+    status: str = "active",
+    email: str = "user@example.com",
+    feed_url: str = "https://feeds.example.com/default",
+) -> None:
     engine = get_mail_db_engine(db_path)
     with engine.begin() as conn:
         conn.execute(
             participants.insert().values(
                 user_did="did:example:123",
-                email="user@example.com",
+                email=email,
                 status=status,
                 type="pilot",
                 language="en",
+                feed_url=feed_url,
             )
         )
 
@@ -144,12 +151,14 @@ def test_upsert_participants_inserts_records(tmp_path) -> None:
                 "email": "new@example.com",
                 "status": "active",
                 "type": "pilot",
+                "feed_url": "https://feeds.example.com/new",
             },
             {
                 "did": "did:second",
                 "email": "second@example.com",
                 "status": "inactive",
                 "type": "admin",
+                "feed_url": "https://feeds.example.com/second",
             },
         ],
     )
@@ -163,6 +172,7 @@ def test_upsert_participants_inserts_records(tmp_path) -> None:
     roster_by_did = {row["did"]: row for row in roster}
     assert roster_by_did["did:new"]["status"] == "active"
     assert roster_by_did["did:second"]["status"] == "inactive"
+    assert roster_by_did["did:new"].get("feed_url") == "https://feeds.example.com/new"
 
 
 def test_upsert_participants_preserves_existing_status(tmp_path) -> None:
@@ -179,6 +189,7 @@ def test_upsert_participants_preserves_existing_status(tmp_path) -> None:
                 "status": "active",  # should be ignored for existing participant
                 "type": "prolific",
                 "language": "nl",
+                "feed_url": "https://feeds.example.com/updated",
             }
         ],
     )
@@ -195,6 +206,7 @@ def test_upsert_participants_preserves_existing_status(tmp_path) -> None:
             "status": "inactive",
             "type": "prolific",
             "language": "nl",
+            "feed_url": "https://feeds.example.com/updated",
         }
     ]
 

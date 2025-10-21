@@ -15,7 +15,12 @@ from app.mail_db.operations import get_mail_db_engine  # noqa: E402
 from app.mail_db.schema import participant_status_history, participants  # noqa: E402
 
 
-def _seed_participant(db_path: Path, *, status: str = "active") -> None:
+def _seed_participant(
+    db_path: Path,
+    *,
+    status: str = "active",
+    feed_url: str = "https://feeds.example.com/default"
+) -> None:
     engine = get_mail_db_engine(db_path)
     with engine.begin() as conn:
         conn.execute(
@@ -25,6 +30,7 @@ def _seed_participant(db_path: Path, *, status: str = "active") -> None:
                 status=status,
                 type="pilot",
                 language="en",
+                feed_url=feed_url,
             )
         )
 
@@ -32,10 +38,11 @@ def _seed_participant(db_path: Path, *, status: str = "active") -> None:
 def test_cli_participant_set_status_updates_db(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "mail.sqlite"
     apply_migrations(db_path)
-    _seed_participant(db_path)
+    _seed_participant(db_path, feed_url="https://feeds.example.com/cli")
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type\n" "cli@example.com,did:example:cli,active,pilot\n",
+        "email,did,status,type,feed_url\n"
+        "cli@example.com,did:example:cli,active,pilot,https://feeds.example.com/cli\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -86,16 +93,24 @@ def test_cli_participant_set_status_updates_db(tmp_path, monkeypatch) -> None:
         assert history_rows == [("active", "inactive")]
 
     contents = csv_path.read_text(encoding="utf-8").strip().splitlines()
-    assert contents[1] == "cli@example.com,did:example:cli,inactive,pilot"
+    assert (
+        contents[1]
+        == "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli"
+    )
 
 
 def test_cli_participant_set_status_no_change(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "mail.sqlite"
     apply_migrations(db_path)
-    _seed_participant(db_path, status="inactive")
+    _seed_participant(
+        db_path,
+        status="inactive",
+        feed_url="https://feeds.example.com/cli",
+    )
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type\n" "cli@example.com,did:example:cli,inactive,pilot\n",
+        "email,did,status,type,feed_url\n"
+        "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -133,14 +148,22 @@ def test_cli_participant_set_status_no_change(tmp_path, monkeypatch) -> None:
         assert history_rows == []
 
     contents = csv_path.read_text(encoding="utf-8").strip().splitlines()
-    assert contents[1] == "cli@example.com,did:example:cli,inactive,pilot"
+    assert (
+        contents[1]
+        == "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli"
+    )
 
 
 def test_cli_participant_set_status_missing_user(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "mail.sqlite"
     apply_migrations(db_path)
+    _seed_participant(
+        db_path,
+        status="active",
+        feed_url="https://feeds.example.com/other",
+    )
     csv_path = tmp_path / "participants.csv"
-    csv_path.write_text("email,did,status,type\n", encoding="utf-8")
+    csv_path.write_text("email,did,status,type,feed_url\n", encoding="utf-8")
     monkeypatch.setattr(
         "app.cli._load_settings",
         lambda: Settings().with_overrides(
@@ -170,9 +193,9 @@ def test_cli_participant_import_csv(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "mail.sqlite"
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type\n"
-        "user1@example.com,did:example:one,active,pilot\n"
-        "user2@example.com,did:example:two,inactive,admin\n",
+        "email,did,status,type,feed_url\n"
+        "user1@example.com,did:example:one,active,pilot,https://feeds.example.com/one\n"
+        "user2@example.com,did:example:two,inactive,admin,https://feeds.example.com/two\n",
         encoding="utf-8",
     )
 
@@ -202,3 +225,5 @@ def test_cli_participant_import_csv(tmp_path, monkeypatch) -> None:
         statuses = {row.user_did: row.status for row in rows}
         assert statuses["did:example:one"] == "active"
         assert statuses["did:example:two"] == "inactive"
+        urls = {row.user_did: row.feed_url for row in rows}
+        assert urls["did:example:one"] == "https://feeds.example.com/one"

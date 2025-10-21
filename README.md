@@ -21,7 +21,7 @@ This directory contains a minimal, working example of the mail updater pipeline.
    ```
 3. **Prepare participant data**
    - Create `data/participants.csv` (relative to the repository root) with columns:
-     `email,did,status,type`.
+     `email,did,status,type,feed_url`.
    - Seed a row for the study admin (see `data/participants.csv` for an example).
    - Once `mail.db` is populated (e.g., via the Qualtrics sync), CLI commands will
      automatically read participants from the database and use the CSV only as a

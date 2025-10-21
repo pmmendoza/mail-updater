@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Dict, Iterable, List, Optional, Sequence
 
@@ -23,6 +23,7 @@ class DailySnapshot:
     active_day: bool
     cumulative_active: int
     on_track: bool
+    engagement_breakdown: Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -76,12 +77,8 @@ def compute_window_summary(
         window_start_ts,
         window_end_ts,
     )
-    engagement_timestamps = _fetch_timestamps(
+    engagement_records = _fetch_engagement_records(
         engine,
-        """
-        SELECT timestamp FROM engagements
-        WHERE did_engagement = :did AND timestamp >= :start AND timestamp < :end
-        """,
         user_did,
         window_start_ts,
         window_end_ts,
@@ -91,14 +88,15 @@ def compute_window_summary(
     retrieval_counts = _aggregate_counts(
         day_range, feed_timestamps, tz, settings.cutoff_hour_local
     )
-    engagement_counts = _aggregate_counts(
-        day_range, engagement_timestamps, tz, settings.cutoff_hour_local
+    engagement_counts, engagement_breakdowns = _aggregate_engagement_counts(
+        day_range, engagement_records, tz, settings.cutoff_hour_local
     )
 
     snapshots = _build_snapshots(
         day_range,
         retrieval_counts,
         engagement_counts,
+        engagement_breakdowns,
         settings.window_days,
         settings.required_active_days,
     )
@@ -142,6 +140,30 @@ def _fetch_timestamps(
         )
         values = [row[0] for row in rows if row[0] is not None]
     return [_parse_timestamp(value) for value in values]
+
+
+def _fetch_engagement_records(
+    engine: Engine, user_did: str, start: datetime, end: datetime
+) -> List[tuple[datetime, str]]:
+    start_iso = start.astimezone(timezone.utc).isoformat()
+    end_iso = end.astimezone(timezone.utc).isoformat()
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT timestamp, engagement_type FROM engagements
+                WHERE did_engagement = :did
+                  AND timestamp >= :start AND timestamp < :end
+                """
+            ),
+            {"did": user_did, "start": start_iso, "end": end_iso},
+        )
+        values = [
+            (row[0], row[1])
+            for row in rows
+            if row[0] is not None and row[1] is not None
+        ]
+    return [(_parse_timestamp(ts), str(et)) for ts, et in values]
 
 
 def _parse_timestamp(value: str) -> datetime:
@@ -196,10 +218,35 @@ def _aggregate_counts(
     return counts
 
 
+def _aggregate_engagement_counts(
+    day_range: Sequence[date],
+    records: Iterable[tuple[datetime, str]],
+    tz,
+    cutoff_hour: int,
+) -> tuple[Dict[date, int], Dict[date, Dict[str, int]]]:
+    total_counts: Dict[date, int] = defaultdict(int)
+    breakdown: Dict[date, Dict[str, int]] = {day: defaultdict(int) for day in day_range}
+
+    for ts, engagement_type in records:
+        day = _study_day_for_utc(ts, tz, cutoff_hour)
+        if day not in breakdown:
+            continue
+        total_counts[day] += 1
+        breakdown[day][engagement_type] += 1
+
+    for day in day_range:
+        total_counts.setdefault(day, 0)
+        # Convert defaultdict to regular dict
+        breakdown[day] = dict(breakdown[day])
+
+    return total_counts, breakdown
+
+
 def _build_snapshots(
     day_range: Sequence[date],
     retrieval_counts: Dict[date, int],
     engagement_counts: Dict[date, int],
+    engagement_breakdowns: Dict[date, Dict[str, int]],
     window_days: int,
     required_active_days: int,
 ) -> List[DailySnapshot]:
@@ -225,6 +272,7 @@ def _build_snapshots(
                 active_day=active,
                 cumulative_active=cumulative_active,
                 on_track=on_track,
+                engagement_breakdown=engagement_breakdowns.get(day, {}),
             )
         )
     return snapshots

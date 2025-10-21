@@ -28,6 +28,7 @@ Last updated: 2025-10-20
 - Manual status changes made with `python -m app.cli participant set-status` remain untouched by the sync; Qualtrics data only updates contact metadata unless a brand-new participant is created.
 - The `participant set-status` command also exports the latest roster back to CSV so legacy tooling sees the updated status immediately.
 - After any sync run, rerun `validate-participants` to confirm roster and compliance data stay consistent.
+- The roster CSV now includes a `feed_url` column; keep it populated (Qualtrics sync will fill it automatically).
 
 ## 2.2 Bounce handling
 - Configure IMAP access in `.env` (`IMAP_HOST`, `IMAP_PORT`, `IMAP_USERNAME`, `IMAP_PASSWORD`, `IMAP_MAILBOX`, `IMAP_USE_SSL`).

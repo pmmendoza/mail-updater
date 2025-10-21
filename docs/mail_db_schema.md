@@ -28,6 +28,7 @@ CREATE TABLE participants (
     type TEXT DEFAULT 'pilot',             -- pilot | prolific | admin | test
     status TEXT DEFAULT 'active',          -- active | inactive | unsubscribed
     language TEXT DEFAULT 'en',
+    feed_url TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -102,6 +103,7 @@ INSERT INTO metadata(key, value) VALUES ('schema_version', '1');
 ### 4.1 Roster synchronisation decision
 - Qualtrics sync should **upsert directly into `mail.db.participants`** while continuing to export `data/participants.csv` as a human-auditable backup.
 - New DIDs create a fresh row with `status='active'`; existing rows only update contact fields (`email`, `type`, `language`) and leave `status` untouched so manual overrides applied via `python -m app.cli participant set-status` remain authoritative.
+- The roster stores each participant's `feed_url`; CSV exports mirror this column for manual review.
 - Any status values present in the Qualtrics payload are ignored for existing records; the sync uses them only when seeding brand-new participants.
 - After the upsert, the CSV export mirrors the latest mail.db roster (including preserved statuses) to keep legacy tooling in lockstep.
 
