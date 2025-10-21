@@ -23,6 +23,12 @@ This directory contains a minimal, working example of the mail updater pipeline.
    - Create `data/participants.csv` (relative to the repository root) with columns:
      `email,did,status,type`.
    - Seed a row for the study admin (see `data/participants.csv` for an example).
+   - Once `mail.db` is populated (e.g., via the Qualtrics sync), CLI commands will
+     automatically read participants from the database and use the CSV only as a
+     fallback or export for manual edits.
+   - To migrate an existing CSV roster into the database, run
+     `python -m app.cli participant import-csv` (re-exports the canonical CSV
+     afterwards).
    - Optionally run `python -m app.cli sync-participants` to pull the latest roster
      from Qualtrics once credentials are in place.
 4. **Run the CLI**

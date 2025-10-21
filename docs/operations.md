@@ -34,6 +34,8 @@ Last updated: 2025-10-20
 - Run `python -m app.cli bounces-scan` to ingest Delivery Status Notifications (DSNs). Each matched recipient updates the latest `send_attempts` row, flips the participant to `inactive`, and appends a note to the JSONL log.
 - Use `--keep-unseen` if you want to leave processed messages unread for manual inspection.
 - Review unmatched recipients reported by the command and reconcile them (e.g., update participant emails or investigate false positives).
+- Use `python -m app.cli participant import-csv` once to bootstrap mail.db from
+  the legacy CSV roster; subsequent runs keep CSV exports in sync automatically.
 
 ## 3. Monitoring & Alerts (planned)
 - **Delivery dashboards**

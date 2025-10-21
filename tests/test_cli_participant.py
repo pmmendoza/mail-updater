@@ -164,3 +164,41 @@ def test_cli_participant_set_status_missing_user(tmp_path, monkeypatch) -> None:
 
     assert result.exit_code != 0
     assert "Participant with DID 'did:example:missing' not found" in result.output
+
+
+def test_cli_participant_import_csv(tmp_path, monkeypatch) -> None:
+    db_path = tmp_path / "mail.sqlite"
+    csv_path = tmp_path / "participants.csv"
+    csv_path.write_text(
+        "email,did,status,type\n"
+        "user1@example.com,did:example:one,active,pilot\n"
+        "user2@example.com,did:example:two,inactive,admin\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "app.cli._load_settings",
+        lambda: Settings().with_overrides(
+            mail_db_path=db_path,
+            participants_csv_path=csv_path,
+        ),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli, ["participant", "import-csv"])
+
+    assert result.exit_code == 0
+    assert "Participants imported" in result.output
+
+    engine = get_mail_db_engine(db_path)
+    with engine.connect() as conn:
+        rows = conn.execute(
+            participants.select().order_by(participants.c.user_did)
+        ).fetchall()
+        assert [row.user_did for row in rows] == [
+            "did:example:one",
+            "did:example:two",
+        ]
+        statuses = {row.user_did: row.status for row in rows}
+        assert statuses["did:example:one"] == "active"
+        assert statuses["did:example:two"] == "inactive"

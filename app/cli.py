@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
+import csv
 
 import click
 from sqlalchemy import text
@@ -21,6 +22,7 @@ from .mail_db.operations import (
     export_participants_to_csv,
     fetch_recent_send_attempts,
     set_participant_status,
+    upsert_participants,
 )
 from .mailer import MailSender
 from .participants import Participant, filter_active, load_participants
@@ -33,8 +35,8 @@ def _load_settings() -> Settings:
     return Settings()
 
 
-def _load_participant_map(csv_path: Path) -> dict[str, Participant]:
-    participants = load_participants(csv_path)
+def _load_participant_map(csv_path: Path, mail_db_path: Path) -> dict[str, Participant]:
+    participants = load_participants(csv_path, mail_db_path=mail_db_path)
     return {p.user_did: p for p in participants}
 
 
@@ -72,7 +74,9 @@ def cli() -> None:
 def aggregate_command() -> None:
     """Compute window summaries for all participants and print a quick overview."""
     settings = _load_settings()
-    participant_map = _load_participant_map(settings.participants_csv_path)
+    participant_map = _load_participant_map(
+        settings.participants_csv_path, settings.mail_db_path
+    )
     active_participants = filter_active(participant_map.values())
     summaries = _summaries_for_participants(settings, active_participants)
 
@@ -99,10 +103,14 @@ def aggregate_command() -> None:
 def preview_command(user_did: str) -> None:
     """Render a single participant's email to stdout."""
     settings = _load_settings()
-    participant_map = _load_participant_map(settings.participants_csv_path)
+    participant_map = _load_participant_map(
+        settings.participants_csv_path, settings.mail_db_path
+    )
     participant = participant_map.get(user_did)
     if not participant:
-        raise click.ClickException(f"No participant with DID {user_did} found in CSV.")
+        raise click.ClickException(
+            f"No participant with DID {user_did} found in roster (CSV/mail.db)."
+        )
 
     engine = get_engine(settings.compliance_db_path)
     summary = compute_window_summary(engine, participant.user_did, settings)
@@ -128,7 +136,9 @@ def send_daily_command(dry_run: Optional[bool]) -> None:
         settings.smtp_dry_run = dry_run
 
     sender = MailSender(settings)
-    participant_map = _load_participant_map(settings.participants_csv_path)
+    participant_map = _load_participant_map(
+        settings.participants_csv_path, settings.mail_db_path
+    )
     active_participants = filter_active(participant_map.values())
 
     summaries = _summaries_for_participants(settings, active_participants)
@@ -188,7 +198,12 @@ def sync_participants_command(survey_filter: Optional[str]) -> None:
 def validate_participants_command() -> None:
     """Verify participant roster entries are unique and present in compliance data."""
     settings = _load_settings()
-    participants = load_participants(settings.participants_csv_path)
+    participants = load_participants(
+        settings.participants_csv_path, mail_db_path=settings.mail_db_path
+    )
+    if not participants:
+        raise click.ClickException("No participants found in mail.db or CSV roster.")
+
     participant_map = {p.user_did: p for p in participants}
     engine = get_engine(settings.compliance_db_path)
 
@@ -293,6 +308,48 @@ def participant_set_status_command(
         click.echo(
             f"No change: participant {result.user_did} already has status {result.new_status}."
         )
+
+
+@participant_group.command("import-csv")
+def participant_import_csv_command() -> None:
+    """Import rows from participants CSV into mail.db (upsert)."""
+    settings = _load_settings()
+    if not settings.participants_csv_path.exists():
+        raise click.ClickException(
+            f"Participants CSV not found at {settings.participants_csv_path}"
+        )
+
+    rows: list[dict[str, str]] = []
+    with settings.participants_csv_path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise click.ClickException("Participants CSV has no header row.")
+        for raw in reader:
+            email = (raw.get("email") or "").strip()
+            did = (raw.get("did") or raw.get("user_did") or "").strip()
+            if not email or not did:
+                continue
+            rows.append(
+                {
+                    "email": email,
+                    "did": did,
+                    "status": (raw.get("status") or "active").strip(),
+                    "type": (raw.get("type") or "pilot").strip(),
+                    "language": (raw.get("language") or "en").strip() or "en",
+                }
+            )
+
+    if not rows:
+        raise click.ClickException(
+            "No valid rows found in participants CSV to import."
+        )
+
+    result = upsert_participants(settings.mail_db_path, rows)
+    export_participants_to_csv(settings.mail_db_path, settings.participants_csv_path)
+    click.echo(
+        "Participants imported into mail.db "
+        f"({result.inserted} inserted, {result.updated} updated, {result.total} total)."
+    )
 
 
 @cli.command("status")

@@ -1,6 +1,11 @@
 import csv
 from pathlib import Path
 
+from app.mail_db.migrations import apply_migrations
+from app.mail_db.operations import get_mail_db_engine
+from app.mail_db.schema import participants as participants_table
+from app.participants import load_participants
+
 
 def test_participants_csv_integrity() -> None:
     """Ensure participant roster has expected structure and values."""
@@ -33,3 +38,32 @@ def test_participants_csv_integrity() -> None:
         and row["type"] == "admin"
         for row in rows
     ), "seed admin participant row missing"
+
+
+def test_load_participants_prefers_mail_db(tmp_path: Path) -> None:
+    db_path = tmp_path / "mail.sqlite"
+    apply_migrations(db_path)
+    engine = get_mail_db_engine(db_path)
+    with engine.begin() as conn:
+        conn.execute(
+            participants_table.insert().values(
+                user_did="did:db:1",
+                email="db@example.com",
+                status="inactive",
+                type="pilot",
+                language="nl",
+            )
+        )
+
+    csv_path = tmp_path / "participants.csv"
+    csv_path.write_text(
+        "email,did,status,type\n" "csv@example.com,did:csv:1,active,pilot\n",
+        encoding="utf-8",
+    )
+
+    participants = load_participants(csv_path, mail_db_path=db_path)
+    assert [p.user_did for p in participants] == ["did:db:1"]
+    participant = participants[0]
+    assert participant.email == "db@example.com"
+    assert participant.language == "nl"
+    assert participant.include_in_emails is False

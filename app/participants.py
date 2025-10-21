@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Iterable, List, Optional
 import csv
 
+from .mail_db.operations import list_participants
+
 
 @dataclass
 class Participant:
@@ -40,8 +42,33 @@ def _status_to_bool(status: Optional[str]) -> bool:
     return status.strip().lower() == "active"
 
 
-def load_participants(csv_path: Path) -> List[Participant]:
-    """Load participants from CSV. Raises FileNotFoundError if missing."""
+def load_participants(
+    csv_path: Path, *, mail_db_path: Optional[Path] = None
+) -> List[Participant]:
+    """Load participants roster, preferring mail.db when available."""
+    if mail_db_path and mail_db_path.exists():
+        db_participants = list_participants(mail_db_path)
+        if db_participants:
+            roster: List[Participant] = []
+            for row in db_participants:
+                user_did = (row.get("did") or "").strip()
+                email = (row.get("email") or "").strip()
+                if not user_did or not email:
+                    continue
+                language = (row.get("language") or "en").strip() or "en"
+                status = (row.get("status") or "active").strip().lower()
+                include_flag = status == "active"
+                roster.append(
+                    Participant(
+                        user_did=user_did,
+                        email=email,
+                        language=language,
+                        include_in_emails=include_flag,
+                    )
+                )
+            if roster:
+                return roster
+
     if not csv_path.exists():
         raise FileNotFoundError(
             f"Participants CSV not found at {csv_path}. "
