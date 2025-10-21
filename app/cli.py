@@ -11,6 +11,7 @@ from sqlalchemy import text
 from .config import Settings
 from .compliance_snapshot import WindowSummary, compute_window_summary
 from .db import get_engine
+from .mail_db import apply_migrations
 from .email_renderer import render_daily_progress
 from .mailer import MailSender
 from .participants import Participant, filter_active, load_participants
@@ -204,6 +205,17 @@ def validate_participants_command() -> None:
         )
 
     click.echo("Roster validation successful: all participants have activity.")
+
+
+@cli.command("migrate-mail-db")
+def migrate_mail_db_command() -> None:
+    """Apply mail.db migrations to ensure the schema is up to date."""
+    settings = _load_settings()
+    settings.ensure_mail_db_parent()
+    version = apply_migrations(settings.mail_db_path)
+    click.echo(
+        f"mail.db migrated to schema version {version} at {settings.mail_db_path}"
+    )
 
 
 def main() -> None:

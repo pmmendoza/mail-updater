@@ -43,6 +43,9 @@ class Settings:
     compliance_db_path: Path = _default_path(
         "COMPLIANCE_DB_PATH", BASE_DIR.parent / "compliance-tracker" / "compliance.db"
     )
+    mail_db_path: Path = _default_path(
+        "MAIL_DB_PATH", BASE_DIR / "mail.db" / "mail.sqlite"
+    )
     participants_csv_path: Path = _default_path(
         "PARTICIPANTS_CSV_PATH", BASE_DIR.parent / "data" / "participants.csv"
     )
@@ -78,6 +81,10 @@ class Settings:
         self.outbox_dir.mkdir(parents=True, exist_ok=True)
         self.send_log_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def ensure_mail_db_parent(self) -> None:
+        """Create the parent directory for mail.db if missing."""
+        self.mail_db_path.parent.mkdir(parents=True, exist_ok=True)
+
     def with_overrides(self, **overrides: Any) -> "Settings":
         """Return a copy of the settings with specified attributes replaced."""
         return replace(self, **overrides)
@@ -87,6 +94,7 @@ class Settings:
         return {
             "tz": self.tz,
             "compliance_db_path": str(self.compliance_db_path),
+            "mail_db_path": str(self.mail_db_path),
             "participants_csv_path": str(self.participants_csv_path),
             "window_days": self.window_days,
             "required_active_days": self.required_active_days,

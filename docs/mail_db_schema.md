@@ -89,7 +89,7 @@ INSERT INTO metadata(key, value) VALUES ('schema_version', '1');
 ```
 
 ## 4. Migration Strategy
-1. **Version 1**: Create tables listed above using Alembic or simple migration script (`scripts/migrations/001_init_mail_db.py`).
+1. **Version 1**: Create tables listed above using the provided migration helper (`python -m app.cli migrate-mail-db`, wraps `scripts/migrations/001_init_mail_db.py`).
 2. **Bootstrap**: Import existing `data/participants.csv` into `participants` table; mark status as `active` unless the CSV indicates otherwise.
 3. **Sync loop**: CLI writes new snapshots/send attempts to mail.db while continuing to read compliance metrics from `compliance.db`.
 4. **CSV deprecation**: Once confidence is built, replace CSV read path with mail.db queries (with fallback export for manual editing).

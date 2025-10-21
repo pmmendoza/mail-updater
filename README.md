@@ -100,6 +100,18 @@ make test   # pytest suite
 The tests exercise the compliance snapshot logic, participant CSV invariants, and
 the Qualtrics API client (with HTTP interactions mocked in unit tests).
 
+## Database Setup
+
+Initialise or upgrade the local `mail.db` schema before running features that
+interact with the SQLite store:
+
+```bash
+python -m app.cli migrate-mail-db
+```
+
+The command respects the `MAIL_DB_PATH` environment variable (defaults to
+`./mail.db/mail.sqlite`) and creates the parent directory if needed.
+
 ## Next steps
 
 - Migrate participant/contact state into `mail.db` for persistence.

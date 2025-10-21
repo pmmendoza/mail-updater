@@ -182,5 +182,41 @@
     ],
     "preflight": "N/A",
     "branch": "main"
+  },
+  {
+    "ts": "2025-10-21T11:57:31Z",
+    "task": "Plan command formatting alignment (no change)",
+    "files": [
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "N/A",
+    "branch": "main"
+  },
+  {
+    "ts": "2025-10-21T12:10:56Z",
+    "task": "Add sprint backlog header",
+    "files": [
+      "AGENTS_TODO.md"
+    ],
+    "preflight": "N/A",
+    "branch": "main"
+  },
+  {
+    "ts": "2025-10-21T14:20:00Z",
+    "task": "Design mail.db schema and migrations",
+    "files": [
+      "AGENTS_TODO.md",
+      "README.md",
+      "app/cli.py",
+      "app/config.py",
+      "app/mail_db/__init__.py",
+      "app/mail_db/migrations.py",
+      "app/mail_db/schema.py",
+      "docs/mail_db_schema.md",
+      "scripts/migrations/001_init_mail_db.py",
+      "tests/test_mail_db_migrations.py"
+    ],
+    "preflight": "PASS",
+    "branch": "main"
   }
 ]
