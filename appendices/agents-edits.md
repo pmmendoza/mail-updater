@@ -18,10 +18,15 @@
 3. Mention in §0 that AGENTS_TODO.md contains live sprint/task data and must include a `session:` mode line.
 
 ### AGENTS_TODO.md
-1. Reintroduce a header such as `session: mode=local-edit` (or current mode) to comply with AGENTS.md §1.
-2. In §0 Notation, add a sentence referencing the status flow and pointer to AGENTS.md.
-3. Under a new “Session Start” note, reference the notification steps in AGENTS.md so both files stay aligned.
-4. Maintain the new #plan/#do instructions but ensure they refer back to AGENTS.md for general policy.
-5. Keep sprint and project structure while ensuring tasks reference the desired mode/status flow.
+1. Reintroduce a header such as `session: mode=local-edit` (or current mode) to comply with AGENTS.md §1. ✅
+2. In §0 Notation, add a sentence referencing the status flow and pointer to AGENTS.md. ✅
+3. Under a new “Session Start” note, reference the notification steps in AGENTS.md so both files stay aligned. (Next iteration recommendation)
+4. Maintain the new #plan/#do instructions but ensure they refer back to AGENTS.md for general policy. ✅
+5. Keep sprint and project structure while ensuring tasks reference the desired mode/status flow. ✅
+
+### Ranked recommendations for future clarity (AGENTS_TODO.md)
+1. Add a brief “Session Start” reminder referencing AGENTS.md notification workflow (ensures onboarding consistency).
+2. Include a compact checklist summarising `#plan` vs `#do` permissions (files editable, status flow reminders).
+3. Provide a short glossary for the new project tag format (`[xxx1]{S}`) with an example to reduce interpretation errors.
 
 These changes keep AGENTS.md as the canonical policy document while making AGENTS_TODO.md the actionable sprint board, aligned with the updated command workflow.
