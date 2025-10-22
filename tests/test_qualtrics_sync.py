@@ -86,6 +86,43 @@ def test_rows_from_responses_extracts_unique_participants() -> None:
     ]
 
 
+def test_rows_from_responses_skips_headers_and_preview_rows() -> None:
+    responses = [
+        {"Status": "Response Type", "email": "header@example.com"},
+        {
+            "Status": '{"ImportId":"status"}',
+            "email": '{"ImportId":"QID70_TEXT"}',
+            "feed_url": '{"ImportId":"feed_url"}',
+        },
+        {
+            "Status": "1",
+            "DistributionChannel": "preview",
+            "email": "preview@example.com",
+            "bs_did": "did:preview",
+            "feed_url": "https://feeds.example.com/preview",
+        },
+        {
+            "Status": "1",
+            "DistributionChannel": "anonymous",
+            "email": "real@example.com",
+            "bs_did": "did:real",
+            "feed_url": "https://feeds.example.com/real",
+        },
+    ]
+
+    rows, quarantine = _rows_from_responses(responses)
+    assert rows == [
+        {
+            "email": "real@example.com",
+            "did": "did:real",
+            "status": "active",
+            "type": "pilot",
+            "feed_url": "https://feeds.example.com/real",
+        }
+    ]
+    assert quarantine == []
+
+
 def test_merge_participants_preserves_existing_metadata() -> None:
     existing = [
         {

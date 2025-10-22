@@ -206,6 +206,17 @@ def _rows_from_responses(
     participants: Dict[str, Dict[str, str]] = {}
     quarantine: List[Dict[str, str]] = []
     for response in responses:
+        status_value = (response.get("Status") or "").strip()
+        if status_value and not status_value.isdigit():
+            # Drop Qualtrics header rows where Status contains labels/ImportIds.
+            continue
+
+        dist_channel = (response.get("DistributionChannel") or "").strip().lower()
+        preview_flag = (response.get("Preview") or "").strip().lower()
+        preview_mode = (response.get("PreviewMode") or "").strip().lower()
+        if "preview" in {dist_channel, preview_flag, preview_mode}:
+            continue
+
         did = _first_nonempty(response, "did", "bs_did", "user_did", "DID")
         email = _first_nonempty(response, "email", "Email", "EmailAddress")
         prolific_id = _first_nonempty(response, "PROLIFIC_ID", "prolific_id")

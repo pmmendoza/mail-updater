@@ -14,6 +14,10 @@ The Qualtrics roster sync is the canonical way to populate and maintain `mail.db
 
 Rows missing either DID, email, or `feed_url` are written to a quarantine CSV (see below).
 
+### Normalising survey exports
+- Qualtrics exports include a header row containing `ImportId` values. The sync already discards blank rows, but if the header appears as a participant (`{"ImportId":"bs_did"}` etc.), add those fields to the survey's **exclude from export** list or provide a QID mapping file so they are ignored.
+- Preview/test responses often lack mandatory fields and will land in the quarantine file. Configure the survey to tag previews (e.g., `PreviewMode`) and filter them out of the export, or ensure the fields are populated before running the sync.
+
 ## Running the sync
 
 ```
