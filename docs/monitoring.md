@@ -32,3 +32,7 @@ This document outlines the MVP approach for surfacing delivery metrics and bounc
 - Automate SQL queries using a lightweight notebook or dashboard.
 - Extend logging to capture send latency timestamps and feed them into metrics.
 - Evaluate long-term home (Grafana, Looker) once infrastructure team is ready.
+- Draft a starter workbook:
+  - Daily compliance snapshot vs send success (join `daily_snapshots` + `send_attempts`).
+  - Bounce triage view listing participants from `qualtrics_quarantine.csv` and inactive roster entries.
+  - Latency proxy chart using send CLI runtimes until precise timestamps land.
