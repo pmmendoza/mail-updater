@@ -18,6 +18,8 @@ Rows missing either DID, email, or `feed_url` are written to a quarantine CSV (s
 
 ```
 python -m app.cli sync-participants
+# or run via Make (honours SURVEY_FILTER env/arg):
+make sync-participants
 ```
 
 - The command runs **manually** (no scheduled job yet).

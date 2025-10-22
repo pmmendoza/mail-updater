@@ -191,11 +191,12 @@ def test_sync_participants_from_qualtrics_updates_csv(
     assert roster_by_did["did:new"].get("feed_url") == "https://feeds.example.com/new"
 
     output = csv_path.read_text(encoding="utf-8")
-    assert "person@example.com" in output
-    assert "philipp@example.com" in output
-    assert "inactive" in output  # manual override preserved
-    assert "feed_url" in output
-    assert "https://feeds.example.com/new" in output
+    expected_csv = (
+        "email,did,status,type,feed_url\n"
+        "person@example.com,did:new,active,prolific,https://feeds.example.com/new\n"
+        "philipp@example.com,did:plc:admin,inactive,admin,https://feeds.example.com/admin\n"
+    )
+    assert output == expected_csv
     assert result.added_participants == 1
     assert result.total_participants == 2
     assert result.surveys_considered == 1
@@ -311,6 +312,7 @@ def test_sync_participants_writes_quarantine(
     assert result.quarantine_path is not None
     assert result.quarantine_path.exists()
     quarantine_contents = result.quarantine_path.read_text(encoding="utf-8")
-    assert "invalid@example.com" in quarantine_contents
+    expected_quarantine = "email,did,feed_url\n" "invalid@example.com,,\n"
+    assert quarantine_contents == expected_quarantine
     roster = list_participants(mail_db_path)
     assert any(row["did"] == "did:valid" for row in roster)

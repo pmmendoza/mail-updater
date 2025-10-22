@@ -108,6 +108,8 @@ Then run the CLI entry point:
 
 ```bash
 python -m app.cli sync-participants
+# or
+make sync-participants              # honours QUALTRICS_* env vars and optional SURVEY_FILTER
 ```
 
 The command talks directly to the Qualtrics export endpoints, merges responses

@@ -31,7 +31,7 @@ Last updated: 2025-10-21
 5. Review log file `outbox/send_log.jsonl` for errors.
 
 ## 2.1 Roster & mail.db alignment
-- `python -m app.cli sync-participants` upserts into `mail.db` first, then rewrites `data/participants.csv` as a backup view so legacy tooling keeps working.
+- Run `make sync-participants` (or `python -m app.cli sync-participants`) to upsert roster data into `mail.db`, then rewrite `data/participants.csv` as a backup view so legacy tooling keeps working. Pass `SURVEY_FILTER=regex` to target specific Qualtrics surveys.
 - Manual status changes made with `python -m app.cli participant set-status` remain untouched by the sync; Qualtrics data only updates contact metadata unless a brand-new participant is created.
 - The `participant set-status` command also exports the latest roster back to CSV so legacy tooling sees the updated status immediately.
 - After any sync run, rerun `validate-participants` to confirm roster and compliance data stay consistent.

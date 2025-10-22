@@ -4,7 +4,7 @@ VENV_DIR := .venv
 PYTHON := $(VENV_DIR)/bin/python
 REQUIREMENTS_STAMP := $(VENV_DIR)/.requirements.stamp
 
-.PHONY: setup sync-env lint test
+.PHONY: setup sync-env lint test sync-participants
 
 setup: $(REQUIREMENTS_STAMP)
 	@python3 scripts/sync_env.py
@@ -31,3 +31,16 @@ lint: $(REQUIREMENTS_STAMP)
 
 test: $(REQUIREMENTS_STAMP)
 	$(VENV_DIR)/bin/pytest
+
+SURVEY_FILTER ?=
+
+ifdef SURVEY_FILTER
+SYNC_SURVEY_FLAG := --survey-filter $(SURVEY_FILTER)
+endif
+
+sync-participants: $(REQUIREMENTS_STAMP)
+	@if [ -z "$$QUALTRICS_BASE_URL" ] || [ -z "$$QUALTRICS_API_TOKEN" ]; then \
+		echo "QUALTRICS_BASE_URL and QUALTRICS_API_TOKEN must be set before running this target."; \
+		exit 1; \
+	fi
+	$(VENV_DIR)/bin/python -m app.cli sync-participants $(SYNC_SURVEY_FLAG)
