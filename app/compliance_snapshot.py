@@ -242,6 +242,68 @@ def _aggregate_engagement_counts(
     return total_counts, breakdown
 
 
+def get_daily_engagement_breakdown(
+    engine: Engine,
+    user_did: str,
+    settings: Settings,
+    *,
+    start_day: Optional[date] = None,
+    end_day: Optional[date] = None,
+    now: Optional[datetime] = None,
+) -> List[DailySnapshot]:
+    """Return per-day retrieval and engagement breakdown for a participant."""
+
+    tz = pytz.timezone(settings.tz)
+    now = now or datetime.now(timezone.utc)
+    now_local = now.astimezone(tz)
+    default_end_day = _study_day_for_local(now_local, settings.cutoff_hour_local)
+    end_day = end_day or default_end_day
+    start_day = start_day or (end_day - timedelta(days=settings.window_days - 1))
+
+    if start_day > end_day:
+        raise ValueError("start_day must be on or before end_day")
+
+    window_start_ts = _study_day_start(start_day, tz, settings.cutoff_hour_local)
+    window_end_ts = _study_day_start(
+        end_day + timedelta(days=1), tz, settings.cutoff_hour_local
+    )
+
+    retrieval_timestamps = _fetch_timestamps(
+        engine,
+        """
+        SELECT timestamp FROM feed_requests
+        WHERE requester_did = :did AND timestamp >= :start AND timestamp < :end
+        """,
+        user_did,
+        window_start_ts,
+        window_end_ts,
+    )
+    engagement_records = _fetch_engagement_records(
+        engine,
+        user_did,
+        window_start_ts,
+        window_end_ts,
+    )
+
+    day_range = _generate_day_range(start_day, end_day)
+    retrieval_counts = _aggregate_counts(
+        day_range, retrieval_timestamps, tz, settings.cutoff_hour_local
+    )
+    engagement_counts, engagement_breakdowns = _aggregate_engagement_counts(
+        day_range, engagement_records, tz, settings.cutoff_hour_local
+    )
+
+    snapshots = _build_snapshots(
+        day_range,
+        retrieval_counts,
+        engagement_counts,
+        engagement_breakdowns,
+        settings.window_days,
+        settings.required_active_days,
+    )
+    return snapshots
+
+
 def _build_snapshots(
     day_range: Sequence[date],
     retrieval_counts: Dict[date, int],

@@ -12,7 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from app.compliance_snapshot import compute_window_summary  # noqa: E402
+from app.compliance_snapshot import (  # noqa: E402
+    compute_window_summary,
+    get_daily_engagement_breakdown,
+)
 from app.config import Settings  # noqa: E402
 
 
@@ -162,3 +165,50 @@ def test_compute_window_summary_returns_none_when_no_activity() -> None:
 
     summary = compute_window_summary(engine, did, settings, now=now)
     assert summary is None
+
+
+def test_get_daily_engagement_breakdown(tmp_path: Path) -> None:
+    engine = _make_engine()
+    did = "did:detail"
+    _insert_activity(
+        engine,
+        did=did,
+        day_offset=0,
+        retrievals=1,
+        engagements=4,
+        engagement_types=["like", "reply"],
+    )
+    _insert_activity(
+        engine,
+        did=did,
+        day_offset=1,
+        retrievals=2,
+        engagements=3,
+        engagement_types=["repost"],
+    )
+
+    settings = Settings().with_overrides(
+        tz="UTC",
+        window_days=3,
+        required_active_days=2,
+        cutoff_hour_local=0,
+    )
+    summaries = get_daily_engagement_breakdown(
+        engine,
+        did,
+        settings,
+        start_day=datetime(2025, 1, 1, tzinfo=timezone.utc).date(),
+        end_day=datetime(2025, 1, 2, tzinfo=timezone.utc).date(),
+        now=datetime(2025, 1, 3, tzinfo=timezone.utc),
+    )
+    assert len(summaries) == 2
+    day0 = summaries[0]
+    assert day0.retrievals == 1
+    assert day0.engagements == 4
+    assert day0.engagement_breakdown.get("like") == 2
+    assert day0.engagement_breakdown.get("reply") == 2
+
+    day1 = summaries[1]
+    assert day1.retrievals == 2
+    assert day1.engagements == 3
+    assert day1.engagement_breakdown.get("repost") == 3

@@ -1,0 +1,45 @@
+---
+title: "NEWSFLOWS — Plan Update"
+output: blastula::blastula_email
+params:
+  recipient_name: "Colleague"
+  plan_date: !expr format(Sys.Date(), "%B %d, %Y")
+  highlights: !r character()
+  tasks: !r NULL        # data.frame/tibble with columns: task, owner, due, status
+  footer_note: ""
+---
+
+```{r setup, include=FALSE}
+library(blastula)
+library(dplyr)
+library(gt)
+```
+
+Hi **`r params$recipient_name`**,
+
+Here’s your plan update for **`r params$plan_date`**.
+
+`r if (length(params$highlights)) "**Highlights**" else ""`
+
+`r if (length(params$highlights)) paste0("- ", params$highlights, collapse = "\n") else ""`
+
+
+```{r tasks-table, results='asis'}
+if (!is.null(params$tasks) && nrow(params$tasks)) {
+  params$tasks |>
+    mutate(Status = dplyr::case_when(
+      tolower(status) %in% c("done", "complete", "completed") ~ "✅ Done",
+      tolower(status) %in% c("blocked", "risk") ~ "⛔ Blocked",
+      TRUE ~ "⏳ In progress"
+    )) |>
+    select(Task = task, Owner = owner, Due = due, Status) |>
+    gt() |>
+    fmt_date(columns = "Due") |>
+    as_raw_html() |>
+    cat()
+} else {
+  cat("_No tasks listed._")
+}
+```
+
+`r if (nzchar(params$footer_note)) paste0("\n\n", params$footer_note) else ""`

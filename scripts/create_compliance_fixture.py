@@ -33,6 +33,7 @@ def main() -> None:
             CREATE TABLE engagements (
                 event_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 did_engagement TEXT NOT NULL,
+                engagement_type TEXT NOT NULL,
                 timestamp TEXT NOT NULL
             );
             """
@@ -41,6 +42,7 @@ def main() -> None:
         base = datetime(2025, 1, 1, 9, tzinfo=timezone.utc)
         active_days = (0, 2, 4, 6)
         inactive_days = (1, 3, 5)
+        engagement_types = ("like", "reply", "repost")
 
         for offset in active_days:
             ts = base + timedelta(days=offset)
@@ -48,10 +50,14 @@ def main() -> None:
                 "INSERT INTO feed_requests (requester_did, timestamp) VALUES (?, ?)",
                 ("did:ontrack", _iso(ts)),
             )
-            for _ in range(3):
+            for index in range(3):
                 conn.execute(
-                    "INSERT INTO engagements (did_engagement, timestamp) VALUES (?, ?)",
-                    ("did:ontrack", _iso(ts + timedelta(minutes=5))),
+                    "INSERT INTO engagements (did_engagement, engagement_type, timestamp) VALUES (?, ?, ?)",
+                    (
+                        "did:ontrack",
+                        engagement_types[index % len(engagement_types)],
+                        _iso(ts + timedelta(minutes=5 + index)),
+                    ),
                 )
 
         for offset in inactive_days:
@@ -61,8 +67,8 @@ def main() -> None:
                 ("did:offtrack", _iso(ts)),
             )
             conn.execute(
-                "INSERT INTO engagements (did_engagement, timestamp) VALUES (?, ?)",
-                ("did:offtrack", _iso(ts + timedelta(minutes=5))),
+                "INSERT INTO engagements (did_engagement, engagement_type, timestamp) VALUES (?, ?, ?)",
+                ("did:offtrack", "reply", _iso(ts + timedelta(minutes=5))),
             )
 
         admin_did = "did:plc:3vomhawgkjhtvw4euuxbll3r"
@@ -71,10 +77,14 @@ def main() -> None:
             "INSERT INTO feed_requests (requester_did, timestamp) VALUES (?, ?)",
             (admin_did, _iso(admin_ts)),
         )
-        for _ in range(3):
+        for index in range(3):
             conn.execute(
-                "INSERT INTO engagements (did_engagement, timestamp) VALUES (?, ?)",
-                (admin_did, _iso(admin_ts + timedelta(minutes=10))),
+                "INSERT INTO engagements (did_engagement, engagement_type, timestamp) VALUES (?, ?, ?)",
+                (
+                    admin_did,
+                    engagement_types[index % len(engagement_types)],
+                    _iso(admin_ts + timedelta(minutes=10 + index)),
+                ),
             )
 
         conn.commit()

@@ -4,16 +4,15 @@ This directory contains a minimal, working example of the mail updater pipeline.
 
 ## Quickstart
 
-1. **Install dependencies**
+1. **Bootstrap the environment**
    ```bash
    cd mail-updater
-   python3 -m venv .venv
-   . .venv/bin/activate
-   python -m pip install -r requirements.txt
+   make setup
+   source .venv/bin/activate
    ```
-2. **Create configuration**
+   `make setup` creates the virtualenv, installs Python dependencies, and refreshes `.env` from the template. Re-run `make sync-env` whenever `.env.template` changes.
+2. **Review configuration**
    ```bash
-   cp .env.template .env
    # edit .env with your Greenhost SMTP credentials or leave SMTP_DRY_RUN=true
    python scripts/create_compliance_fixture.py  # optional sample database
    # set COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db for local testing
@@ -34,13 +33,13 @@ This directory contains a minimal, working example of the mail updater pipeline.
 4. **Run the CLI**
    ```bash
    python -m app.cli aggregate            # show per-participant status
-python -m app.cli preview --user-did did:example:123
-python -m app.cli send-daily --dry-run # writes .eml files to outbox/
-python -m app.cli validate-participants # confirm roster entries have data
-python -m app.cli participant set-status --user-did did:example:123 --status inactive --reason "manual hold"
-python -m app.cli status --limit 10 --user-did did:example:123
-python -m app.cli bounces-scan --keep-unseen
-```
+   python -m app.cli preview --user-did did:example:123
+   python -m app.cli send-daily --dry-run # writes .eml files to outbox/
+   python -m app.cli validate-participants # confirm roster entries have data
+   python -m app.cli participant set-status --user-did did:example:123 --status inactive --reason "manual hold"
+   python -m app.cli status --limit 10 --user-did did:example:123
+   python -m app.cli bounces-scan --keep-unseen
+   ```
 
 The status command updates `mail.db` first and then re-exports `data/participants.csv` so older tooling stays in sync.
 
@@ -91,6 +90,8 @@ activity, and emit a dry-run email under `outbox/`.
 - `scripts/mvp_check.sh` — quick smoke test (aggregate + dry-run send).
 - `participants-updater.R` — legacy tidyverse helper (kept as reference only).
 - `docs/architecture.md` — detailed architecture notes with mermaid diagram of data flow.
+- `docs/qualtrics_sync.md` — roster sync field reference, manual run workflow, and quarantine procedures.
+- `docs/monitoring.md` — guidelines for deriving metrics/alerts from `send_attempts` and bounce data.
 
 ### Qualtrics participant sync
 

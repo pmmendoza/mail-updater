@@ -1,6 +1,6 @@
 # Mail Updater Operations Guide
 
-Last updated: 2025-10-20
+Last updated: 2025-10-21
 
 ## 1. Environments
 - **Local dev**: uses `.env`, fixture SQLite database, and dry-run SMTP mode.
@@ -8,7 +8,14 @@ Last updated: 2025-10-20
 - **Production**: TBD; requires secure secret management and CI/CD integration.
 
 ## 2. Daily Runbook
-1. Ensure `.env` has valid `COMPLIANCE_DB_PATH`, `PARTICIPANTS_CSV_PATH`, and SMTP credentials.
+0. Ensure the local environment is bootstrapped:
+   ```bash
+   make setup            # once per checkout or after requirements change
+   source .venv/bin/activate
+   python -m app.cli migrate-mail-db
+   ```
+   Re-run `make sync-env` whenever `.env.template` changes.
+1. Confirm `.env` has valid `COMPLIANCE_DB_PATH`, `PARTICIPANTS_CSV_PATH`, and SMTP credentials.
 2. Run validation:
    ```bash
    python -m app.cli validate-participants
@@ -24,11 +31,12 @@ Last updated: 2025-10-20
 5. Review log file `outbox/send_log.jsonl` for errors.
 
 ## 2.1 Roster & mail.db alignment
-- `python -m app.cli sync-participants` now upserts into `mail.db` first, then rewrites `data/participants.csv` as a backup view.
+- `python -m app.cli sync-participants` upserts into `mail.db` first, then rewrites `data/participants.csv` as a backup view so legacy tooling keeps working.
 - Manual status changes made with `python -m app.cli participant set-status` remain untouched by the sync; Qualtrics data only updates contact metadata unless a brand-new participant is created.
 - The `participant set-status` command also exports the latest roster back to CSV so legacy tooling sees the updated status immediately.
 - After any sync run, rerun `validate-participants` to confirm roster and compliance data stay consistent.
 - The roster CSV now includes a `feed_url` column; keep it populated (Qualtrics sync will fill it automatically).
+- See [`docs/qualtrics_sync.md`](qualtrics_sync.md) for field definitions, quarantine handling, and troubleshooting tips.
 
 ## 2.2 Bounce handling
 - Configure IMAP access in `.env` (`IMAP_HOST`, `IMAP_PORT`, `IMAP_USERNAME`, `IMAP_PASSWORD`, `IMAP_MAILBOX`, `IMAP_USE_SSL`).
@@ -42,7 +50,8 @@ Last updated: 2025-10-20
 - **Delivery dashboards**
   - Track send successes/failures via JSONL log ingestion or direct `send_attempts` queries (success rate, failure reasons, bounce counts).
   - Surface latency metrics (`rendered_at` vs `smtp_response`) once timestamps are captured; until then, approximate via CLI run time.
-  - Expose most recent sends with `python -m app.cli status --limit 20` for quick manual review.
+- Expose most recent sends with `python -m app.cli status --limit 20` for quick manual review.
+- Use `app.compliance_snapshot.get_daily_engagement_breakdown` when building analytics dashboards; it returns retrieval counts and per-type engagement breakdowns per day.
 - **Bounce alerts**
   - Schedule `python -m app.cli bounces-scan` (cron/systemd/GitHub Actions) to poll DSNs at least daily.
   - Emit notification (email/Slack) when `participants_updated` is non-empty; store unmatched recipients for manual triage.
@@ -112,3 +121,23 @@ Example local crontab entry (dry-run at 05:05 local time):
 ```
 
 After reviewing the generated `.eml` files, rerun without `--dry-run` when ready.
+
+## Appendix: Local smoke test recipe
+Use the bundled fixtures to rehearse the full flow without production data:
+
+```bash
+make setup
+source .venv/bin/activate
+python scripts/create_compliance_fixture.py
+COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db \
+PARTICIPANTS_CSV_PATH=data/participants.csv \
+python -m app.cli migrate-mail-db
+COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db \
+PARTICIPANTS_CSV_PATH=data/participants.csv \
+python -m app.cli participant import-csv
+COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db \
+PARTICIPANTS_CSV_PATH=data/participants.csv \
+python -m app.cli send-daily --dry-run
+```
+
+This generates fresh engagement data (including per-type breakdowns), primes `mail.db`, and drops dry-run `.eml` files into `outbox/` for review.

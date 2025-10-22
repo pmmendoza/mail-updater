@@ -1,3 +1,10 @@
+## PREPARE-COMMIT — 2025-10-22 11:16 (agent)
+- branch: feat/mail-db-daily-engagement-20251022
+- files: app/compliance_snapshot.py, scripts/create_compliance_fixture.py, data/fixtures/compliance_fixture.db, tests/test_compliance_snapshot.py, README.md, docs/operations.md, docs/monitoring.md, docs/qualtrics_sync.md
+- summary: Added daily engagement breakdown helper with fixture/test coverage, refreshed Qualtrics/operations docs, and shifted quickstart + fixtures to the Make-based workflow.
+- tests: make lint; make test; python -m app.cli migrate-mail-db; python -m app.cli participant import-csv; python -m app.cli aggregate; python -m app.cli send-daily --dry-run; python -m app.cli status --limit 10; python -m app.cli validate-participants
+- next: human → review bundle, commit, and push
+
 ## PREPARE-COMMIT — 2025-10-20 19:06 (agent)
 - branch: main
 - files: app/cli.py, scripts/create_compliance_fixture.py, data/fixtures/compliance_fixture.db, tests/test_compliance_snapshot.py, README.md, .env.template, docs/implementation-plan.md
