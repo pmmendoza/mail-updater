@@ -1,3 +1,9 @@
+## COMMITTED — 2025-10-22 11:30 (agent)
+- commit: f17d7e4
+- files: Makefile, README.md, docs/operations.md, docs/qualtrics_sync.md, tests/test_qualtrics_sync.py
+- summary: Added a `make sync-participants` helper and tightened Qualtrics CSV/quarantine tests while documenting the new entry point for operators.
+- tests: make lint; make test
+
 ## PREPARE-COMMIT — 2025-10-22 11:16 (agent)
 - branch: feat/mail-db-daily-engagement-20251022
 - files: app/compliance_snapshot.py, scripts/create_compliance_fixture.py, data/fixtures/compliance_fixture.db, tests/test_compliance_snapshot.py, README.md, docs/operations.md, docs/monitoring.md, docs/qualtrics_sync.md
