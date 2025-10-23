@@ -45,6 +45,7 @@ make sync-participants
 - Prefer manipulating participants through CLI helpers (`participant set-status`, `participant import-csv`).
 - The CSV (`data/participants.csv`) is now a read-only audit export; mail.db stores the source of truth.
 - After manual changes, rerun `validate-participants` before sending mail.
+- Field mapping is stored in `qualtrics_field_mapping.csv`; edit that file when you rename survey questions (e.g., switching to `email_pilot`). `_rows_from_responses` consults the mapping before falling back to heuristic key detection.
 
 ## Legacy R script parity notes
 - The retired `participants-updater.R` script fetched the same Qualtrics surveys using `QUALTRICS_API_KEY`; the Python CLI expects `QUALTRICS_API_TOKEN` but otherwise mirrors the workflow.

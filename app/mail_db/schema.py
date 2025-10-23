@@ -19,7 +19,7 @@ from sqlalchemy.sql import func, text
 
 metadata = MetaData()
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 participants = Table(
     "participants",
@@ -31,6 +31,7 @@ participants = Table(
     Column("status", String, nullable=False, server_default=text("'active'")),
     Column("language", String, nullable=False, server_default=text("'en'")),
     Column("feed_url", String),
+    Column("survey_completed_at", DateTime),
     Column("created_at", DateTime, nullable=False, server_default=func.now()),
     Column(
         "updated_at",

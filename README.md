@@ -112,6 +112,9 @@ python -m app.cli sync-participants
 make sync-participants              # honours QUALTRICS_* env vars and optional SURVEY_FILTER
 ```
 
+- Each run rewrites both `mail.db` (source of truth) and `data/participants.csv` (audit export). Any rows that fail validation are written to `../data/qualtrics_quarantine.csv` next to the repo’s `data/` folder; we intentionally keep the file so operators can inspect and fix the source survey data before re-running the sync.
+- Field-to-column resolution is controlled by `qualtrics_field_mapping.csv`. Update that mapping if you rename survey questions (e.g., switching to `email_pilot`); the sync will try those keys first and fall back to heuristics.
+
 The command talks directly to the Qualtrics export endpoints, merges responses
 from matching surveys, upserts the roster into `mail.db` (preserving manual status
 overrides), and rewrites `data/participants.csv` as a mirror of the database.

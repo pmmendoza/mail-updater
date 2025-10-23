@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import csv
+import functools
 import io
 import re
 import time
 import zipfile
 from dataclasses import dataclass
+from datetime import timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
 import requests
 from requests import Response, Session
+
+from dateutil import parser as date_parser
 
 from .config import Settings
 from .mail_db.operations import (
@@ -22,12 +26,36 @@ from .mail_db.operations import (
     upsert_participants,
 )
 
-REQUIRED_HEADERS = ["email", "did", "status", "type", "feed_url"]
+REQUIRED_HEADERS = [
+    "email",
+    "did",
+    "status",
+    "type",
+    "feed_url",
+    "survey_completed_at",
+]
 PROLIFIC_TYPE = "prolific"
+FIELD_MAPPING_PATH = Path(__file__).resolve().parents[1] / "qualtrics_field_mapping.csv"
 
 
 class QualtricsSyncError(RuntimeError):
     """Raised when the Qualtrics sync process cannot complete successfully."""
+
+
+@functools.lru_cache(maxsize=1)
+def _load_field_mapping() -> Dict[str, str]:
+    if not FIELD_MAPPING_PATH.exists():
+        return {}
+
+    mapping: Dict[str, str] = {}
+    with FIELD_MAPPING_PATH.open(encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        for row in reader:
+            field = (row.get("field") or "").strip().lower()
+            key = (row.get("qualtrics_key") or "").strip()
+            if field and key:
+                mapping[field] = key
+    return mapping
 
 
 def _normalize_base_url(raw: str) -> str:
@@ -186,6 +214,9 @@ def _write_csv(csv_path: Path, rows: Iterable[Dict[str, str]]) -> None:
                     or DEFAULT_STATUS,
                     "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
                     "feed_url": (row.get("feed_url") or "").strip(),
+                    "survey_completed_at": (
+                        row.get("survey_completed_at") or ""
+                    ).strip(),
                 }
             )
 
@@ -203,6 +234,8 @@ def _first_nonempty(row: Dict[str, str], *keys: str) -> Optional[str]:
 def _rows_from_responses(
     responses: Iterable[Dict[str, str]],
 ) -> tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+    field_mapping = _load_field_mapping()
+
     participants: Dict[str, Dict[str, str]] = {}
     quarantine: List[Dict[str, str]] = []
     for response in responses:
@@ -217,17 +250,63 @@ def _rows_from_responses(
         if "preview" in {dist_channel, preview_flag, preview_mode}:
             continue
 
-        did = _first_nonempty(response, "did", "bs_did", "user_did", "DID")
-        email = _first_nonempty(response, "email", "Email", "EmailAddress")
-        prolific_id = _first_nonempty(response, "PROLIFIC_ID", "prolific_id")
-        feed_url = _first_nonempty(
-            response,
-            "feed_url",
-            "Feed URL",
-            "feedUrl",
-            "assigned_feed_url",
-            "Assigned Feed URL",
+        did_candidates = []
+        if mapping_key := field_mapping.get("did"):
+            did_candidates.append(mapping_key)
+        did_candidates.extend(
+            [
+                "did",
+                "bs_did",
+                "user_did",
+                "DID",
+                "QID_DID",
+            ]
         )
+        did = _first_nonempty(response, *did_candidates)
+
+        email_candidates = []
+        if mapping_key := field_mapping.get("email"):
+            email_candidates.append(mapping_key)
+        email_candidates.extend(
+            [
+                "email",
+                "Email",
+                "EmailAddress",
+                "RecipientEmail",
+                "email_pilot",
+            ]
+        )
+        email = _first_nonempty(response, *email_candidates)
+        prolific_id = _first_nonempty(response, "PROLIFIC_ID", "prolific_id")
+
+        feed_candidates = []
+        if mapping_key := field_mapping.get("feed_url"):
+            feed_candidates.append(mapping_key)
+        feed_candidates.extend(
+            [
+                "feed_url",
+                "Feed URL",
+                "feedUrl",
+                "assigned_feed_url",
+                "Assigned Feed URL",
+            ]
+        )
+        feed_url = _first_nonempty(response, *feed_candidates)
+
+        completed_candidates = []
+        if mapping_key := field_mapping.get("survey_completed_at"):
+            completed_candidates.append(mapping_key)
+        completed_candidates.extend(["RecordedDate", "EndDate"])
+        completed_raw = _first_nonempty(response, *completed_candidates)
+        completed_at: Optional[str] = None
+        if completed_raw:
+            try:
+                completed_dt = date_parser.parse(completed_raw)
+                if not completed_dt.tzinfo:
+                    completed_dt = completed_dt.replace(tzinfo=timezone.utc)
+                completed_at = completed_dt.astimezone(timezone.utc).isoformat()
+            except (ValueError, TypeError):
+                completed_at = None
 
         if not email and prolific_id:
             email = f"{prolific_id}@email.prolific.com"
@@ -255,6 +334,8 @@ def _rows_from_responses(
                 existing["type"] = participant_type
             if feed_url:
                 existing["feed_url"] = feed_url
+            if completed_at and not existing.get("survey_completed_at"):
+                existing["survey_completed_at"] = completed_at
             continue
 
         participants[did] = {
@@ -263,6 +344,7 @@ def _rows_from_responses(
             "status": DEFAULT_STATUS,
             "type": participant_type,
             "feed_url": feed_url,
+            "survey_completed_at": completed_at or "",
         }
 
     return list(participants.values()), quarantine

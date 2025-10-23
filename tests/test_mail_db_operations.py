@@ -207,6 +207,7 @@ def test_upsert_participants_preserves_existing_status(tmp_path) -> None:
             "type": "prolific",
             "language": "nl",
             "feed_url": "https://feeds.example.com/updated",
+            "survey_completed_at": "",
         }
     ]
 

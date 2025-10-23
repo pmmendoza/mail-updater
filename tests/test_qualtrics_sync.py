@@ -63,6 +63,7 @@ def test_rows_from_responses_extracts_unique_participants() -> None:
             "status": "active",
             "type": "prolific",
             "feed_url": "https://feeds.example.com/one",
+            "survey_completed_at": "",
         },
         {
             "email": "b@example.com",
@@ -70,6 +71,7 @@ def test_rows_from_responses_extracts_unique_participants() -> None:
             "status": "active",
             "type": "pilot",
             "feed_url": "https://feeds.example.com/two",
+            "survey_completed_at": "",
         },
     ]
     assert quarantine == [
@@ -104,7 +106,7 @@ def test_rows_from_responses_skips_headers_and_preview_rows() -> None:
         {
             "Status": "1",
             "DistributionChannel": "anonymous",
-            "email": "real@example.com",
+            "email_pilot": "real@example.com",
             "bs_did": "did:real",
             "feed_url": "https://feeds.example.com/real",
         },
@@ -118,6 +120,7 @@ def test_rows_from_responses_skips_headers_and_preview_rows() -> None:
             "status": "active",
             "type": "pilot",
             "feed_url": "https://feeds.example.com/real",
+            "survey_completed_at": "",
         }
     ]
     assert quarantine == []
@@ -229,9 +232,9 @@ def test_sync_participants_from_qualtrics_updates_csv(
 
     output = csv_path.read_text(encoding="utf-8")
     expected_csv = (
-        "email,did,status,type,feed_url\n"
-        "person@example.com,did:new,active,prolific,https://feeds.example.com/new\n"
-        "philipp@example.com,did:plc:admin,inactive,admin,https://feeds.example.com/admin\n"
+        "email,did,status,type,feed_url,survey_completed_at\n"
+        "person@example.com,did:new,active,prolific,https://feeds.example.com/new,\n"
+        "philipp@example.com,did:plc:admin,inactive,admin,https://feeds.example.com/admin,\n"
     )
     assert output == expected_csv
     assert result.added_participants == 1
@@ -298,6 +301,7 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
             "type": "pilot",
             "language": "en",
             "feed_url": "https://feeds.example.com/123",
+            "survey_completed_at": "",
         }
     ]
     assert result.added_participants == 0

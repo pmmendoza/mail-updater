@@ -1,0 +1,5 @@
+field,qualtrics_key
+did,bs_did
+email,email_pilot
+feed_url,feed_url
+survey_completed_at,RecordedDate

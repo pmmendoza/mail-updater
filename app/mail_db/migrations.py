@@ -30,9 +30,22 @@ def _migration_002(conn: Connection) -> None:
         conn.execute(text("ALTER TABLE participants ADD COLUMN feed_url TEXT"))
 
 
+def _migration_003(conn: Connection) -> None:
+    """Add survey_completed_at column to participants."""
+    existing_cols = {
+        row[1]
+        for row in conn.exec_driver_sql("PRAGMA table_info(participants)").fetchall()
+    }
+    if "survey_completed_at" not in existing_cols:
+        conn.execute(
+            text("ALTER TABLE participants ADD COLUMN survey_completed_at DATETIME")
+        )
+
+
 MIGRATIONS: Dict[int, MigrationFn] = {
     1: _migration_001,
     2: _migration_002,
+    3: _migration_003,
 }
 
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
+from datetime import timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Tuple
-import csv
+
+from dateutil import parser as date_parser
 
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.engine import Engine, Row
@@ -85,6 +88,14 @@ def list_participants(db_path: Path) -> List[dict[str, str]]:
 
     roster: List[dict[str, str]] = []
     for row in rows:
+        completed_value = row.get("survey_completed_at")
+        if isinstance(completed_value, str):
+            completed_iso = completed_value.strip()
+        elif completed_value is not None:
+            completed_iso = completed_value.astimezone(timezone.utc).isoformat()
+        else:
+            completed_iso = ""
+
         roster.append(
             {
                 "did": row["user_did"],
@@ -93,6 +104,7 @@ def list_participants(db_path: Path) -> List[dict[str, str]]:
                 "type": row.get("type", DEFAULT_TYPE),
                 "language": row.get("language", DEFAULT_LANGUAGE),
                 "feed_url": row.get("feed_url", ""),
+                "survey_completed_at": completed_iso,
             }
         )
 
@@ -180,6 +192,16 @@ def upsert_participants(
                 record.get("status") or DEFAULT_STATUS
             ).strip() or DEFAULT_STATUS
             new_feed_url = (record.get("feed_url") or "").strip()
+            completed_raw = (record.get("survey_completed_at") or "").strip()
+            completed_iso: Optional[str] = None
+            if completed_raw:
+                try:
+                    completed_dt = date_parser.parse(completed_raw)
+                    if not completed_dt.tzinfo:
+                        completed_dt = completed_dt.replace(tzinfo=timezone.utc)
+                    completed_iso = completed_dt.astimezone(timezone.utc).isoformat()
+                except (ValueError, TypeError):
+                    completed_iso = None
 
             existing = existing_map.get(user_did)
             if existing:
@@ -198,6 +220,9 @@ def upsert_participants(
 
                 if new_feed_url and new_feed_url != (existing.get("feed_url") or ""):
                     update_values["feed_url"] = new_feed_url
+
+                if completed_iso and not existing.get("survey_completed_at"):
+                    update_values["survey_completed_at"] = completed_iso
 
                 if update_values:
                     update_values["updated_at"] = func.now()
@@ -220,6 +245,7 @@ def upsert_participants(
                         type=new_type,
                         language=new_language,
                         feed_url=new_feed_url or None,
+                        survey_completed_at=completed_iso,
                     )
                 )
                 inserted += 1

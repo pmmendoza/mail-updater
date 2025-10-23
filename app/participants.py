@@ -16,6 +16,7 @@ class Participant:
     language: str = "en"
     include_in_emails: bool = True
     feed_url: Optional[str] = None
+    survey_completed_at: Optional[str] = None
 
 
 def _to_bool(value: str) -> bool:
@@ -59,6 +60,7 @@ def load_participants(
                 status = (row.get("status") or "active").strip().lower()
                 include_flag = status == "active"
                 feed_url = (row.get("feed_url") or "").strip() or None
+                completed_at = (row.get("survey_completed_at") or "").strip() or None
                 roster.append(
                     Participant(
                         user_did=user_did,
@@ -66,6 +68,7 @@ def load_participants(
                         language=language,
                         include_in_emails=include_flag,
                         feed_url=feed_url,
+                        survey_completed_at=completed_at,
                     )
                 )
             if roster:
