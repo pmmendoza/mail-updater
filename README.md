@@ -10,10 +10,11 @@ This directory contains a minimal, working example of the mail updater pipeline.
    make setup
    source .venv/bin/activate
    ```
-   `make setup` creates the virtualenv, installs Python dependencies, and refreshes `.env` from the template. Re-run `make sync-env` whenever `.env.template` changes.
+   `make setup` creates the virtualenv, installs Python dependencies, refreshes `.env` from the template, and scaffolds `user_config.yml` if it is missing. Re-run `make sync-env` whenever `.env.template` changes.
 2. **Review configuration**
    ```bash
-   # edit .env with your Greenhost SMTP credentials or leave SMTP_DRY_RUN=true
+   # edit user_config.yml for non-secret settings (paths, mailer defaults, requirements)
+   # edit .env for secrets (SMTP/IMAP passwords, Qualtrics token, etc.)
    python scripts/create_compliance_fixture.py  # optional sample database
    # set COMPLIANCE_DB_PATH=data/fixtures/compliance_fixture.db for local testing
    # set PARTICIPANTS_CSV_PATH=data/participants.csv to use the bundled roster sample
@@ -114,6 +115,32 @@ make sync-participants              # honours QUALTRICS_* env vars and optional 
 
 - Each run rewrites both `mail.db` (source of truth) and `data/participants.csv` (audit export). Any rows that fail validation are written to `../data/qualtrics_quarantine.csv` next to the repo’s `data/` folder; we intentionally keep the file so operators can inspect and fix the source survey data before re-running the sync.
 - Field-to-column resolution is controlled by `qualtrics_field_mapping.csv`. Update that mapping if you rename survey questions (e.g., switching to `email_pilot`); the sync will try those keys first and fall back to heuristics.
+
+### Configuration reference
+
+- Non-secret defaults live in `app/default_config.yml`; user-specific overrides belong in `user_config.yml`.
+- Secrets (SMTP/IMAP passwords, Qualtrics API token, etc.) stay in `.env`.
+- Requirements for compliance monitoring are defined under the `requirements` tree in the YAML config. Example:
+
+  ```yml
+  requirements:
+    defaults:
+      min_active_days: 10
+      min_engagement: 3
+      min_retrievals: 1
+      max_skip_days: 4
+      max_skip_span: 2
+      day_cut_off: "05:00"
+    main:
+      survey_id: SV_6u0qynofAHvYSz4
+    pilot:
+      survey_id: SV_6u0qynofAHvYSz4
+      min_active_days: 3
+      max_skip_days: 0
+      max_skip_span: 0
+  ```
+
+- The CLI merges `defaults` with the requested study label (`--study pilot`, etc.), enabling per-survey compliance thresholds.
 
 The command talks directly to the Qualtrics export endpoints, merges responses
 from matching surveys, upserts the roster into `mail.db` (preserving manual status

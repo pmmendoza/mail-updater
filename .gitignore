@@ -4,4 +4,5 @@ __pycache__/
 outbox/
 AGENTS_TODO.md
 AGENTS.md
+user_config.yml
 *.DS_Store

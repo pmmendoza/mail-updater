@@ -3,10 +3,12 @@ SHELL := /bin/bash
 VENV_DIR := .venv
 PYTHON := $(VENV_DIR)/bin/python
 REQUIREMENTS_STAMP := $(VENV_DIR)/.requirements.stamp
+USER_CONFIG := user_config.yml
+DEFAULT_CONFIG := app/default_config.yml
 
 .PHONY: setup sync-env lint test sync-participants
 
-setup: $(REQUIREMENTS_STAMP)
+setup: $(REQUIREMENTS_STAMP) $(USER_CONFIG)
 	@python3 scripts/sync_env.py
 	@echo "Virtual environment ready."
 	@echo "Activate it with: source $(VENV_DIR)/bin/activate"
@@ -23,6 +25,12 @@ $(REQUIREMENTS_STAMP): requirements.txt $(PYTHON)
 		pip install --upgrade pip && \
 		pip install --disable-pip-version-check --requirement requirements.txt && \
 		touch $(REQUIREMENTS_STAMP)
+
+$(USER_CONFIG):
+	@if [ ! -f "$@" ]; then \
+		cp $(DEFAULT_CONFIG) $@ && \
+		echo "Created $@ from template. Please customise it before running the CLI."; \
+	fi
 
 lint: $(REQUIREMENTS_STAMP)
 	$(VENV_DIR)/bin/ruff check app tests scripts

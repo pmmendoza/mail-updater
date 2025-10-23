@@ -1,0 +1,53 @@
+# Default configuration values for mail-updater (non-secret).
+# Copy to user_config.yml and customise as needed.
+
+general:
+  tz: Europe/Amsterdam
+  window_days: 14
+  required_active_days: 10
+  cutoff_hour_local: 5
+  send_hour_local: 9
+
+paths:
+  compliance_db_path: ../compliance-tracker/compliance.db
+  mail_db_path: mail.db/mail.sqlite
+  participants_csv_path: ../data/participants.csv
+  outbox_dir: outbox
+  send_log_path: outbox/send_log.jsonl
+
+mailer:
+  host: smtp.example.com
+  port: 587
+  username: user@example.com
+  use_ssl: false
+  from: "Example Project <noreply@example.com>"
+  reply_to: noreply@example.com
+  dry_run: true
+  subject: "Example Project: daily progress update"
+
+imap:
+  host: imap.example.com
+  port: 993
+  username: user@example.com
+  mailbox: INBOX
+  use_ssl: true
+
+qualtrics:
+  base_url: example.qualtrics.com
+  survey_filter: ""
+  survey_id: ""
+
+services:
+  feedgen_hostname: feeds.example.com
+  feedgen_listenhost: feeds.example.com
+
+requirements:
+  defaults:
+    min_active_days: 10
+    min_engagement: 3
+    min_retrievals: 1
+    max_skip_days: 4
+    max_skip_span: 2
+    day_cut_off: "05:00"
+  main:
+    survey_id: ""
