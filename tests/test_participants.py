@@ -58,8 +58,8 @@ def test_load_participants_prefers_mail_db(tmp_path: Path) -> None:
 
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url\n"
-        "csv@example.com,did:csv:1,active,pilot,https://feeds.example.com/csv\n",
+        "email,did,status,type,feed_url,survey_completed_at\n"
+        "csv@example.com,did:csv:1,active,pilot,https://feeds.example.com/csv,\n",
         encoding="utf-8",
     )
 

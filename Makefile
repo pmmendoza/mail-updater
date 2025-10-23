@@ -3,15 +3,18 @@ SHELL := /bin/bash
 VENV_DIR := .venv
 PYTHON := $(VENV_DIR)/bin/python
 REQUIREMENTS_STAMP := $(VENV_DIR)/.requirements.stamp
+DEV_REQUIREMENTS_STAMP := $(VENV_DIR)/.requirements-dev.stamp
 USER_CONFIG := user_config.yml
 DEFAULT_CONFIG := app/default_config.yml
 
-.PHONY: setup sync-env lint test sync-participants
+.PHONY: setup setup\:dev sync-env lint test sync-participants
 
 setup: $(REQUIREMENTS_STAMP) $(USER_CONFIG)
 	@python3 scripts/sync_env.py
 	@echo "Virtual environment ready."
 	@echo "Activate it with: source $(VENV_DIR)/bin/activate"
+
+setup\:dev: setup $(DEV_REQUIREMENTS_STAMP)
 
 sync-env:
 	@python3 scripts/sync_env.py
@@ -26,18 +29,24 @@ $(REQUIREMENTS_STAMP): requirements.txt $(PYTHON)
 		pip install --disable-pip-version-check --requirement requirements.txt && \
 		touch $(REQUIREMENTS_STAMP)
 
+$(DEV_REQUIREMENTS_STAMP): requirements.dev.txt $(REQUIREMENTS_STAMP)
+	@echo "Installing development dependencies..."
+	@source $(VENV_DIR)/bin/activate && \
+		pip install --disable-pip-version-check --requirement requirements.dev.txt && \
+		touch $(DEV_REQUIREMENTS_STAMP)
+
 $(USER_CONFIG):
 	@if [ ! -f "$@" ]; then \
 		cp $(DEFAULT_CONFIG) $@ && \
 		echo "Created $@ from template. Please customise it before running the CLI."; \
 	fi
 
-lint: $(REQUIREMENTS_STAMP)
+lint: $(DEV_REQUIREMENTS_STAMP)
 	$(VENV_DIR)/bin/ruff check app tests scripts
 	$(VENV_DIR)/bin/mypy app
 	$(VENV_DIR)/bin/black --check app tests scripts
 
-test: $(REQUIREMENTS_STAMP)
+test: $(DEV_REQUIREMENTS_STAMP)
 	$(VENV_DIR)/bin/pytest
 
 SURVEY_FILTER ?=

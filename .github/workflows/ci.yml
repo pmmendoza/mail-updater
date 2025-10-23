@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install system dependencies
+        run: python -m pip install --upgrade pip
+      - name: Set up project (dev)
+        run: make setup:dev
+        env:
+          QUALTRICS_API_TOKEN: dummy
+      - name: Lint
+        run: make lint
+      - name: Tests
+        run: make test

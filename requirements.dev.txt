@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest
+ruff
+black
+mypy
+types-python-dateutil
+types-pytz
+types-requests

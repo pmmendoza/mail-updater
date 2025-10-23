@@ -175,8 +175,8 @@ def test_sync_participants_from_qualtrics_updates_csv(
 ) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url\n"
-        "philipp.m.mendoza@gmail.com,did:plc:admin,active,admin,https://feeds.example.com/admin\n",
+        "email,did,status,type,feed_url,survey_completed_at\n"
+        "philipp.m.mendoza@gmail.com,did:plc:admin,active,admin,https://feeds.example.com/admin,\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"
@@ -217,6 +217,8 @@ def test_sync_participants_from_qualtrics_updates_csv(
         qualtrics_base_url="eu.qualtrics.com",
         qualtrics_api_token="token",
         qualtrics_survey_filter="NEWSFLOWS",
+        qualtrics_survey_ids=[],
+        qualtrics_survey_id=None,
     )
 
     stub = StubClient(surveys, responses)
@@ -259,8 +261,8 @@ def test_sync_participants_requires_credentials(tmp_path: Path) -> None:
 def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url\n"
-        "person@example.com,did:123,active,pilot,https://feeds.example.com/123\n",
+        "email,did,status,type,feed_url,survey_completed_at\n"
+        "person@example.com,did:123,active,pilot,https://feeds.example.com/123,\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"
@@ -283,7 +285,9 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
         mail_db_path=mail_db_path,
         qualtrics_base_url="eu.qualtrics.com",
         qualtrics_api_token="token",
+        qualtrics_survey_ids=[],
         qualtrics_survey_filter="NEWSFLOWS",
+        qualtrics_survey_id=None,
     )
 
     stub = StubClient([], {})
@@ -317,7 +321,7 @@ def test_sync_participants_writes_quarantine(
 ) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url\n",
+        "email,did,status,type,feed_url,survey_completed_at\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"
@@ -344,6 +348,8 @@ def test_sync_participants_writes_quarantine(
         mail_db_path=mail_db_path,
         qualtrics_base_url="eu.qualtrics.com",
         qualtrics_api_token="token",
+        qualtrics_survey_ids=[],
+        qualtrics_survey_id=None,
     )
 
     stub = StubClient(surveys, responses)

@@ -22,6 +22,8 @@ Rows missing either DID, email, or `feed_url` are written to a quarantine CSV (s
 
 ```
 python -m app.cli sync-participants
+# target specific surveys
+python -m app.cli sync-participants --survey-id SV_ABC123 --survey-id SV_DEF456
 # or run via Make (honours SURVEY_FILTER env/arg):
 make sync-participants
 ```
@@ -40,6 +42,8 @@ make sync-participants
 - On API errors, the CLI raises `QualtricsSyncError` with the Qualtrics response.
 - If the quarantine file continues to populate, verify that the Qualtrics survey includes the `feed_url` field.
 - Rosters remain available via `python -m app.cli participant import-csv` if manual fixes are needed.
+- Field mapping is stored in `qualtrics_field_mapping.csv`; edit that file when you rename survey questions (e.g., switching to `email_pilot`). `_rows_from_responses` consults the mapping before falling back to heuristic key detection.
+- Support for multiple surveys is driven either by repeating `--survey-id` on the CLI or by listing IDs under `qualtrics.survey_ids` in the YAML config. When explicit IDs are supplied, regex filtering is skipped.
 
 ## Manual roster edits
 - Prefer manipulating participants through CLI helpers (`participant set-status`, `participant import-csv`).

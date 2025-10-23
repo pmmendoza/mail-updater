@@ -11,7 +11,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import timezone
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 import requests
 from requests import Response, Session
@@ -56,6 +56,19 @@ def _load_field_mapping() -> Dict[str, str]:
             if field and key:
                 mapping[field] = key
     return mapping
+
+
+def _format_completion(value: Optional[Any]) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if hasattr(value, "astimezone"):
+        try:
+            return value.astimezone(timezone.utc).isoformat()
+        except Exception:
+            return str(value)
+    return str(value)
 
 
 def _normalize_base_url(raw: str) -> str:
@@ -214,9 +227,9 @@ def _write_csv(csv_path: Path, rows: Iterable[Dict[str, str]]) -> None:
                     or DEFAULT_STATUS,
                     "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
                     "feed_url": (row.get("feed_url") or "").strip(),
-                    "survey_completed_at": (
-                        row.get("survey_completed_at") or ""
-                    ).strip(),
+                    "survey_completed_at": _format_completion(
+                        row.get("survey_completed_at")
+                    ),
                 }
             )
 
@@ -403,6 +416,7 @@ def _merge_participants(
 def sync_participants_from_qualtrics(
     settings: Settings,
     *,
+    survey_ids: Optional[Iterable[str]] = None,
     survey_filter: Optional[str] = None,
     client: Optional[QualtricsClient] = None,
 ) -> SyncResult:
@@ -436,30 +450,47 @@ def sync_participants_from_qualtrics(
     if filter_value:
         pattern = re.compile(filter_value)
 
-    surveys = client.list_surveys()
-    if pattern:
-        surveys = [survey for survey in surveys if pattern.search(survey.name)]
+    provided_ids = [sid for sid in (survey_ids or []) if sid]
+    if not provided_ids and settings.qualtrics_survey_ids:
+        provided_ids = list(settings.qualtrics_survey_ids)
 
-    if not surveys:
-        # Nothing to do; keep the current roster.
-        if existing_db_rows:
-            _write_csv(csv_path, existing_db_rows)
-            total_participants = len(existing_db_rows)
-        else:
-            _write_csv(csv_path, existing_rows or [])
-            total_participants = len(existing_dids)
-        return SyncResult(
-            surveys_considered=0,
-            responses_processed=0,
-            total_participants=total_participants,
-            added_participants=0,
-            quarantined_dids=[],
-            quarantine_path=None,
-        )
-
+    surveys: List[Survey]
     responses: List[Dict[str, str]] = []
-    for survey in surveys:
-        responses.extend(client.fetch_responses(survey.survey_id))
+    responses_processed = 0
+
+    if provided_ids:
+        requested_ids = list(dict.fromkeys(provided_ids))
+        survey_lookup = {survey.survey_id: survey for survey in client.list_surveys()}
+        surveys = []
+        for sid in requested_ids:
+            surveys.append(survey_lookup.get(sid, Survey(survey_id=sid, name=sid)))
+            responses.extend(client.fetch_responses(sid))
+        responses_processed = len(responses)
+    else:
+        surveys = client.list_surveys()
+        if pattern:
+            surveys = [survey for survey in surveys if pattern.search(survey.name)]
+
+        if not surveys:
+            if existing_db_rows:
+                _write_csv(csv_path, existing_db_rows)
+                total_participants = len(existing_db_rows)
+            else:
+                _write_csv(csv_path, existing_rows or [])
+                total_participants = len(existing_dids)
+            return SyncResult(
+                surveys_considered=0,
+                responses_processed=0,
+                total_participants=total_participants,
+                added_participants=0,
+                quarantined_dids=[],
+                quarantine_path=None,
+            )
+
+        for survey in surveys:
+            survey_responses = client.fetch_responses(survey.survey_id)
+            responses.extend(survey_responses)
+            responses_processed += len(survey_responses)
 
     new_rows, quarantined = _rows_from_responses(responses)
     quarantine_path: Optional[Path] = None
@@ -481,7 +512,7 @@ def sync_participants_from_qualtrics(
             total_participants = len(existing_dids)
         return SyncResult(
             surveys_considered=len(surveys),
-            responses_processed=len(responses),
+            responses_processed=responses_processed,
             total_participants=total_participants,
             added_participants=0,
             quarantined_dids=sorted(
@@ -501,7 +532,7 @@ def sync_participants_from_qualtrics(
 
     return SyncResult(
         surveys_considered=len(surveys),
-        responses_processed=len(responses),
+        responses_processed=responses_processed,
         total_participants=upsert_result.total,
         added_participants=upsert_result.inserted,
         quarantined_dids=sorted(

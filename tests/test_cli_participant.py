@@ -41,8 +41,8 @@ def test_cli_participant_set_status_updates_db(tmp_path, monkeypatch) -> None:
     _seed_participant(db_path, feed_url="https://feeds.example.com/cli")
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url\n"
-        "cli@example.com,did:example:cli,active,pilot,https://feeds.example.com/cli\n",
+        "email,did,status,type,feed_url,survey_completed_at\n"
+        "cli@example.com,did:example:cli,active,pilot,https://feeds.example.com/cli,\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -95,7 +95,7 @@ def test_cli_participant_set_status_updates_db(tmp_path, monkeypatch) -> None:
     contents = csv_path.read_text(encoding="utf-8").strip().splitlines()
     assert (
         contents[1]
-        == "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli"
+        == "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli,"
     )
 
 
@@ -109,8 +109,8 @@ def test_cli_participant_set_status_no_change(tmp_path, monkeypatch) -> None:
     )
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url\n"
-        "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli\n",
+        "email,did,status,type,feed_url,survey_completed_at\n"
+        "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli,\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -150,7 +150,7 @@ def test_cli_participant_set_status_no_change(tmp_path, monkeypatch) -> None:
     contents = csv_path.read_text(encoding="utf-8").strip().splitlines()
     assert (
         contents[1]
-        == "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli"
+        == "cli@example.com,did:example:cli,inactive,pilot,https://feeds.example.com/cli,"
     )
 
 
@@ -163,7 +163,9 @@ def test_cli_participant_set_status_missing_user(tmp_path, monkeypatch) -> None:
         feed_url="https://feeds.example.com/other",
     )
     csv_path = tmp_path / "participants.csv"
-    csv_path.write_text("email,did,status,type,feed_url\n", encoding="utf-8")
+    csv_path.write_text(
+        "email,did,status,type,feed_url,survey_completed_at\n", encoding="utf-8"
+    )
     monkeypatch.setattr(
         "app.cli._load_settings",
         lambda: Settings().with_overrides(
@@ -193,9 +195,9 @@ def test_cli_participant_import_csv(tmp_path, monkeypatch) -> None:
     db_path = tmp_path / "mail.sqlite"
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url\n"
-        "user1@example.com,did:example:one,active,pilot,https://feeds.example.com/one\n"
-        "user2@example.com,did:example:two,inactive,admin,https://feeds.example.com/two\n",
+        "email,did,status,type,feed_url,survey_completed_at\n"
+        "user1@example.com,did:example:one,active,pilot,https://feeds.example.com/one,\n"
+        "user2@example.com,did:example:two,inactive,admin,https://feeds.example.com/two,\n",
         encoding="utf-8",
     )
 

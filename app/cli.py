@@ -179,15 +179,34 @@ def send_daily_command(dry_run: Optional[bool]) -> None:
 
 @cli.command("sync-participants")
 @click.option(
+    "--survey-id",
+    "survey_ids",
+    multiple=True,
+    help="Specific Qualtrics survey ID to include (may be passed multiple times).",
+)
+@click.option(
     "--survey-filter",
     default=None,
-    help="Optional regex pattern to select Qualtrics surveys to include.",
+    help="Optional regex pattern to select Qualtrics surveys to include when no explicit IDs are provided.",
 )
-def sync_participants_command(survey_filter: Optional[str]) -> None:
+def sync_participants_command(
+    survey_ids: tuple[str, ...], survey_filter: Optional[str]
+) -> None:
     """Refresh the participant roster from Qualtrics via the REST API."""
     settings = _load_settings()
+    survey_ids_list = [sid for sid in survey_ids if sid]
+    if survey_ids_list and survey_filter:
+        click.echo(
+            "Ignoring --survey-filter because explicit --survey-id values were provided.",
+            err=True,
+        )
+        survey_filter = None
     try:
-        result = sync_participants_from_qualtrics(settings, survey_filter=survey_filter)
+        result = sync_participants_from_qualtrics(
+            settings,
+            survey_ids=survey_ids_list if survey_ids_list else None,
+            survey_filter=survey_filter,
+        )
     except QualtricsSyncError as exc:
         raise click.ClickException(str(exc)) from exc
     click.echo(

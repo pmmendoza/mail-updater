@@ -44,6 +44,8 @@ This directory contains a minimal, working example of the mail updater pipeline.
 
 The status command updates `mail.db` first and then re-exports `data/participants.csv` so older tooling stays in sync.
 
+> For development workflows (linting/tests), install tooling with `make setup:dev` after the initial `make setup`.
+
 ### IMAP bounce handling
 
 Add the following entries to `.env` to enable automated bounce suppression:
@@ -115,6 +117,7 @@ make sync-participants              # honours QUALTRICS_* env vars and optional 
 
 - Each run rewrites both `mail.db` (source of truth) and `data/participants.csv` (audit export). Any rows that fail validation are written to `../data/qualtrics_quarantine.csv` next to the repo’s `data/` folder; we intentionally keep the file so operators can inspect and fix the source survey data before re-running the sync.
 - Field-to-column resolution is controlled by `qualtrics_field_mapping.csv`. Update that mapping if you rename survey questions (e.g., switching to `email_pilot`); the sync will try those keys first and fall back to heuristics.
+- Provide explicit survey IDs via `user_config.yml` (`qualtrics.survey_ids`) or the CLI (`--survey-id`, repeatable) when working with multiple country-specific surveys. If no IDs are supplied, the optional `--survey-filter` (or YAML `survey_filter`) falls back to regex matching.
 
 ### Configuration reference
 

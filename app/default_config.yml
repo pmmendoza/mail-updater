@@ -35,7 +35,7 @@ imap:
 qualtrics:
   base_url: example.qualtrics.com
   survey_filter: ""
-  survey_id: ""
+  survey_ids: []
 
 services:
   feedgen_hostname: feeds.example.com

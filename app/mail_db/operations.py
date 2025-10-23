@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
-from datetime import timezone
+from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Tuple
@@ -140,7 +140,15 @@ def export_participants_to_csv(db_path: Path, csv_path: Path) -> None:
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with csv_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
-            handle, fieldnames=["email", "did", "status", "type", "feed_url"]
+            handle,
+            fieldnames=[
+                "email",
+                "did",
+                "status",
+                "type",
+                "feed_url",
+                "survey_completed_at",
+            ],
         )
         writer.writeheader()
         for row in rows:
@@ -151,6 +159,7 @@ def export_participants_to_csv(db_path: Path, csv_path: Path) -> None:
                     "status": row.get("status", DEFAULT_STATUS),
                     "type": row.get("type", DEFAULT_TYPE),
                     "feed_url": row.get("feed_url", ""),
+                    "survey_completed_at": row.get("survey_completed_at", ""),
                 }
             )
 
@@ -193,15 +202,15 @@ def upsert_participants(
             ).strip() or DEFAULT_STATUS
             new_feed_url = (record.get("feed_url") or "").strip()
             completed_raw = (record.get("survey_completed_at") or "").strip()
-            completed_iso: Optional[str] = None
+            completed_dt: Optional[datetime] = None
             if completed_raw:
                 try:
-                    completed_dt = date_parser.parse(completed_raw)
-                    if not completed_dt.tzinfo:
-                        completed_dt = completed_dt.replace(tzinfo=timezone.utc)
-                    completed_iso = completed_dt.astimezone(timezone.utc).isoformat()
+                    parsed_dt = date_parser.parse(completed_raw)
+                    if not parsed_dt.tzinfo:
+                        parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
+                    completed_dt = parsed_dt.astimezone(timezone.utc)
                 except (ValueError, TypeError):
-                    completed_iso = None
+                    completed_dt = None
 
             existing = existing_map.get(user_did)
             if existing:
@@ -221,8 +230,8 @@ def upsert_participants(
                 if new_feed_url and new_feed_url != (existing.get("feed_url") or ""):
                     update_values["feed_url"] = new_feed_url
 
-                if completed_iso and not existing.get("survey_completed_at"):
-                    update_values["survey_completed_at"] = completed_iso
+                if completed_dt and not existing.get("survey_completed_at"):
+                    update_values["survey_completed_at"] = completed_dt
 
                 if update_values:
                     update_values["updated_at"] = func.now()
@@ -245,7 +254,7 @@ def upsert_participants(
                         type=new_type,
                         language=new_language,
                         feed_url=new_feed_url or None,
-                        survey_completed_at=completed_iso,
+                        survey_completed_at=completed_dt,
                     )
                 )
                 inserted += 1

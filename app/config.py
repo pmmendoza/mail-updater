@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import os
 
 from dotenv import load_dotenv
@@ -171,6 +171,29 @@ def _config_dict(path: str) -> Dict[str, Any]:
     return {}
 
 
+def _config_list(config_path: str, env_var: str, sep: str = ",") -> List[str]:
+    value = _config_get(config_path)
+    items: List[str] = []
+    if isinstance(value, list):
+        items.extend(str(item).strip() for item in value if str(item).strip())
+    elif isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            inner = stripped[1:-1]
+            if inner.strip():
+                items.extend(part.strip() for part in inner.split(sep) if part.strip())
+        else:
+            items.extend(part.strip() for part in stripped.split(sep) if part.strip())
+
+    if items:
+        return items
+
+    env_value = os.getenv(env_var)
+    if env_value:
+        return [part.strip() for part in env_value.split(sep) if part.strip()]
+    return []
+
+
 def _config_str(config_path: str, env_var: str, default: str) -> str:
     value = _config_optional_str(config_path, env_var, default)
     if value is None:
@@ -261,6 +284,7 @@ class Settings:
     requirements: Dict[str, Any] = field(
         default_factory=lambda: _config_dict("requirements")
     )
+    qualtrics_survey_ids: List[str] = field(default_factory=list)
 
     def ensure_outbox(self) -> None:
         """Create directories used by the mailer if missing."""
@@ -300,6 +324,7 @@ class Settings:
             "qualtrics_api_token": bool(self.qualtrics_api_token),
             "qualtrics_survey_filter": self.qualtrics_survey_filter,
             "qualtrics_survey_id": self.qualtrics_survey_id,
+            "qualtrics_survey_ids": list(self.qualtrics_survey_ids),
             "imap_host": self.imap_host,
             "imap_port": self.imap_port,
             "imap_username": self.imap_username,
@@ -309,3 +334,13 @@ class Settings:
             "feedgen_listenhost": self.feedgen_listenhost,
             "requirements": deepcopy(self.requirements),
         }
+
+    def __post_init__(self) -> None:
+        if not self.qualtrics_survey_ids:
+            config_ids = _config_list("qualtrics.survey_ids", "QUALTRICS_SURVEY_IDS")
+            if config_ids:
+                self.qualtrics_survey_ids = config_ids
+            elif self.qualtrics_survey_id:
+                self.qualtrics_survey_ids = [self.qualtrics_survey_id]
+            else:
+                self.qualtrics_survey_ids = []
