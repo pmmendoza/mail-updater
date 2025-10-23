@@ -2,4 +2,6 @@ field,qualtrics_key
 did,bs_did
 email,email_pilot
 feed_url,feed_url
+prolific_id,PROLIFIC_ID
+study_type,study_type
 survey_completed_at,RecordedDate

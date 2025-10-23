@@ -22,18 +22,11 @@ from .config import Settings
 from .mail_db.operations import (
     DEFAULT_STATUS,
     DEFAULT_TYPE,
+    export_participants_to_csv,
     list_participants,
     upsert_participants,
 )
 
-REQUIRED_HEADERS = [
-    "email",
-    "did",
-    "status",
-    "type",
-    "feed_url",
-    "survey_completed_at",
-]
 PROLIFIC_TYPE = "prolific"
 FIELD_MAPPING_PATH = Path(__file__).resolve().parents[1] / "qualtrics_field_mapping.csv"
 
@@ -213,26 +206,6 @@ def _read_existing(csv_path: Path) -> List[Dict[str, str]]:
         return [dict(row) for row in reader]
 
 
-def _write_csv(csv_path: Path, rows: Iterable[Dict[str, str]]) -> None:
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with csv_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=REQUIRED_HEADERS)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {
-                    "email": row.get("email", "").strip(),
-                    "did": row.get("did", "").strip(),
-                    "status": (row.get("status") or DEFAULT_STATUS).strip()
-                    or DEFAULT_STATUS,
-                    "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
-                    "feed_url": (row.get("feed_url") or "").strip(),
-                    "survey_completed_at": _format_completion(
-                        row.get("survey_completed_at")
-                    ),
-                }
-            )
-
 
 def _first_nonempty(row: Dict[str, str], *keys: str) -> Optional[str]:
     for key in keys:
@@ -290,7 +263,18 @@ def _rows_from_responses(
             ]
         )
         email = _first_nonempty(response, *email_candidates)
-        prolific_id = _first_nonempty(response, "PROLIFIC_ID", "prolific_id")
+
+        prolific_candidates = []
+        if mapping_key := field_mapping.get("prolific_id"):
+            prolific_candidates.append(mapping_key)
+        prolific_candidates.extend(["PROLIFIC_ID", "prolific_id"])
+        prolific_id = _first_nonempty(response, *prolific_candidates)
+
+        study_type_candidates = []
+        if mapping_key := field_mapping.get("study_type"):
+            study_type_candidates.append(mapping_key)
+        study_type_candidates.extend(["STUDY_TYPE", "study_type"])
+        study_type = _first_nonempty(response, *study_type_candidates)
 
         feed_candidates = []
         if mapping_key := field_mapping.get("feed_url"):
@@ -358,6 +342,8 @@ def _rows_from_responses(
             "type": participant_type,
             "feed_url": feed_url,
             "survey_completed_at": completed_at or "",
+            "prolific_id": prolific_id or "",
+            "study_type": study_type or "",
         }
 
     return list(participants.values()), quarantine
@@ -377,6 +363,11 @@ def _merge_participants(
             "status": (row.get("status") or DEFAULT_STATUS).strip() or DEFAULT_STATUS,
             "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
             "feed_url": (row.get("feed_url") or "").strip(),
+            "survey_completed_at": _format_completion(
+                row.get("survey_completed_at")
+            ),
+            "prolific_id": (row.get("prolific_id") or "").strip(),
+            "study_type": (row.get("study_type") or "").strip(),
         }
 
     for row in new_rows:
@@ -400,6 +391,15 @@ def _merge_participants(
             new_feed_url = (row.get("feed_url") or "").strip()
             if new_feed_url and new_feed_url != record.get("feed_url"):
                 record["feed_url"] = new_feed_url
+            new_completed = _format_completion(row.get("survey_completed_at"))
+            if new_completed and not record.get("survey_completed_at"):
+                record["survey_completed_at"] = new_completed
+            new_prolific = (row.get("prolific_id") or "").strip()
+            if new_prolific and not record.get("prolific_id"):
+                record["prolific_id"] = new_prolific
+            new_study_type = (row.get("study_type") or "").strip()
+            if new_study_type and not record.get("study_type"):
+                record["study_type"] = new_study_type
         else:
             merged[did] = {
                 "email": row.get("email", "").strip(),
@@ -408,6 +408,11 @@ def _merge_participants(
                 or DEFAULT_STATUS,
                 "type": (row.get("type") or DEFAULT_TYPE).strip() or DEFAULT_TYPE,
                 "feed_url": (row.get("feed_url") or "").strip(),
+                "survey_completed_at": _format_completion(
+                    row.get("survey_completed_at")
+                ),
+                "prolific_id": (row.get("prolific_id") or "").strip(),
+                "study_type": (row.get("study_type") or "").strip(),
             }
 
     return sorted(merged.values(), key=lambda item: item["email"])
@@ -473,11 +478,12 @@ def sync_participants_from_qualtrics(
 
         if not surveys:
             if existing_db_rows:
-                _write_csv(csv_path, existing_db_rows)
                 total_participants = len(existing_db_rows)
+                export_participants_to_csv(db_path, csv_path)
             else:
-                _write_csv(csv_path, existing_rows or [])
                 total_participants = len(existing_dids)
+                if not csv_path.exists():
+                    export_participants_to_csv(db_path, csv_path)
             return SyncResult(
                 surveys_considered=0,
                 responses_processed=0,
@@ -505,11 +511,10 @@ def sync_participants_from_qualtrics(
 
     if not new_rows:
         if existing_db_rows:
-            _write_csv(csv_path, existing_db_rows)
             total_participants = len(existing_db_rows)
         else:
-            _write_csv(csv_path, existing_rows or [])
             total_participants = len(existing_dids)
+        export_participants_to_csv(db_path, csv_path)
         return SyncResult(
             surveys_considered=len(surveys),
             responses_processed=responses_processed,
@@ -524,11 +529,7 @@ def sync_participants_from_qualtrics(
     merged = _merge_participants(existing_rows, new_rows)
 
     upsert_result = upsert_participants(db_path, merged)
-    current_roster = list_participants(db_path)
-    if current_roster:
-        _write_csv(csv_path, current_roster)
-    else:
-        _write_csv(csv_path, merged)
+    export_participants_to_csv(db_path, csv_path)
 
     return SyncResult(
         surveys_considered=len(surveys),

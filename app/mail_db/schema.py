@@ -19,7 +19,7 @@ from sqlalchemy.sql import func, text
 
 metadata = MetaData()
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 5
 
 participants = Table(
     "participants",
@@ -31,6 +31,8 @@ participants = Table(
     Column("status", String, nullable=False, server_default=text("'active'")),
     Column("language", String, nullable=False, server_default=text("'en'")),
     Column("feed_url", String),
+    Column("prolific_id", String),
+    Column("study_type", String),
     Column("survey_completed_at", DateTime),
     Column("created_at", DateTime, nullable=False, server_default=func.now()),
     Column(
@@ -104,6 +106,21 @@ send_attempts = Table(
 )
 Index("idx_send_attempts_status", send_attempts.c.status)
 
+compliance_monitoring = Table(
+    "compliance_monitoring",
+    metadata,
+    Column("snapshot_date", Date, primary_key=True),
+    Column("user_did", String, primary_key=True),
+    Column("study_label", String, primary_key=True),
+    Column("retrievals", Integer, nullable=False, server_default=text("0")),
+    Column("engagements", Integer, nullable=False, server_default=text("0")),
+    Column("engagement_breakdown", Text, nullable=False, server_default=text("'{}'")),
+    Column("active_day", Integer, nullable=False, server_default=text("0")),
+    Column("cumulative_active", Integer, nullable=False, server_default=text("0")),
+    Column("cumulative_skip", Integer, nullable=False, server_default=text("0")),
+    Column("computed_at", DateTime, nullable=False, server_default=func.now()),
+)
+
 metadata_table = Table(
     "metadata",
     metadata,
@@ -116,5 +133,6 @@ ALL_TABLES = (
     participant_status_history,
     daily_snapshots,
     send_attempts,
+    compliance_monitoring,
     metadata_table,
 )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -14,15 +15,32 @@ from dateutil import parser as date_parser
 from sqlalchemy import create_engine, select, update
 from sqlalchemy.engine import Engine, Row
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.sql import func
 
 from .migrations import apply_migrations
-from .schema import participant_status_history, participants, send_attempts
+from .schema import (
+    compliance_monitoring,
+    participant_status_history,
+    participants,
+    send_attempts,
+)
 
 ALLOWED_STATUSES = {"active", "inactive", "unsubscribed"}
 DEFAULT_STATUS = "active"
 DEFAULT_TYPE = "pilot"
 DEFAULT_LANGUAGE = "en"
+CSV_FIELDNAMES = [
+    "email",
+    "did",
+    "status",
+    "type",
+    "feed_url",
+    "survey_completed_at",
+    "prolific_id",
+    "study_type",
+    "audit_timestamp",
+]
 
 
 class InvalidStatusError(ValueError):
@@ -78,6 +96,107 @@ class SendAttemptRecord:
     status: str
 
 
+def seed_survey_completion(
+    db_path: Path, *, participant_types: Iterable[str], completed_at: datetime
+) -> List[str]:
+    """Populate survey_completed_at for participants of selected types.
+
+    Returns the list of participant DIDs that were updated.
+    """
+
+    apply_migrations(db_path)
+    engine = get_mail_db_engine(db_path)
+    normalized_types = [
+        value.strip()
+        for value in participant_types
+        if value and value.strip()
+    ]
+    if not normalized_types:
+        return []
+
+    completed_ts = completed_at.astimezone(timezone.utc)
+
+    with engine.begin() as conn:
+        target_dids = conn.execute(
+            select(participants.c.user_did)
+            .where(participants.c.type.in_(normalized_types))
+            .where(participants.c.survey_completed_at.is_(None))
+        ).scalars().all()
+
+        if not target_dids:
+            return []
+
+        conn.execute(
+            update(participants)
+            .where(participants.c.type.in_(normalized_types))
+            .where(participants.c.survey_completed_at.is_(None))
+            .values(
+                survey_completed_at=completed_ts,
+                updated_at=func.now(),
+            )
+        )
+
+    return target_dids
+
+
+def upsert_compliance_monitoring_rows(
+    db_path: Path, rows: Iterable[dict[str, Any]]
+) -> int:
+    """Upsert compliance monitoring cache rows into mail.db."""
+
+    records: List[dict[str, Any]] = []
+    for row in rows:
+        breakdown = row.get("engagement_breakdown", {})
+        if isinstance(breakdown, str):
+            breakdown_json = breakdown
+        else:
+            breakdown_json = json.dumps(breakdown, sort_keys=True)
+
+        records.append(
+            {
+                "snapshot_date": row["snapshot_date"],
+                "user_did": row["user_did"],
+                "study_label": row["study_label"],
+                "retrievals": int(row.get("retrievals", 0)),
+                "engagements": int(row.get("engagements", 0)),
+                "engagement_breakdown": breakdown_json,
+                "active_day": int(bool(row.get("active_day"))),
+                "cumulative_active": int(row.get("cumulative_active", 0)),
+                "cumulative_skip": int(row.get("cumulative_skip", 0)),
+                "computed_at": row.get("computed_at", datetime.now(timezone.utc)),
+            }
+        )
+
+    if not records:
+        return 0
+
+    apply_migrations(db_path)
+    engine = get_mail_db_engine(db_path)
+
+    stmt = sqlite_insert(compliance_monitoring).values(records)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[
+            compliance_monitoring.c.snapshot_date,
+            compliance_monitoring.c.user_did,
+            compliance_monitoring.c.study_label,
+        ],
+        set_={
+            "retrievals": stmt.excluded.retrievals,
+            "engagements": stmt.excluded.engagements,
+            "engagement_breakdown": stmt.excluded.engagement_breakdown,
+            "active_day": stmt.excluded.active_day,
+            "cumulative_active": stmt.excluded.cumulative_active,
+            "cumulative_skip": stmt.excluded.cumulative_skip,
+            "computed_at": stmt.excluded.computed_at,
+        },
+    )
+
+    with engine.begin() as conn:
+        conn.execute(stmt)
+
+    return len(records)
+
+
 def list_participants(db_path: Path) -> List[dict[str, str]]:
     """Return the current participant roster as dictionaries."""
 
@@ -105,6 +224,8 @@ def list_participants(db_path: Path) -> List[dict[str, str]]:
                 "language": row.get("language", DEFAULT_LANGUAGE),
                 "feed_url": row.get("feed_url", ""),
                 "survey_completed_at": completed_iso,
+                "prolific_id": row.get("prolific_id") or "",
+                "study_type": row.get("study_type") or "",
             }
         )
 
@@ -134,34 +255,75 @@ def find_participant_by_email(db_path: Path, email: str) -> Optional[Tuple[int, 
 
 
 def export_participants_to_csv(db_path: Path, csv_path: Path) -> None:
-    """Write the participants roster from mail.db to a CSV file."""
+    """Append new participants from mail.db to the audit CSV without rewriting history."""
 
     rows = list_participants(db_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+
+    existing_fieldnames: List[str] = []
+    existing_rows: List[dict[str, str]] = []
+    existing_dids: set[str] = set()
+
+    if csv_path.exists():
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle)
+            existing_fieldnames = list(reader.fieldnames or [])
+            for row in reader:
+                record = {key: value for key, value in row.items()}
+                existing_rows.append(record)
+                did = (record.get("did") or "").strip()
+                if did:
+                    existing_dids.add(did)
+
+    if not existing_fieldnames:
+        existing_fieldnames = list(CSV_FIELDNAMES)
+
+    missing_fields = [field for field in CSV_FIELDNAMES if field not in existing_fieldnames]
+    if missing_fields or not csv_path.exists():
+        for field in missing_fields:
+            existing_fieldnames.append(field)
+        with csv_path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=existing_fieldnames,
+                extrasaction="ignore",
+            )
+            writer.writeheader()
+            for row in existing_rows:
+                sanitized = {field: row.get(field, "") for field in existing_fieldnames}
+                writer.writerow(sanitized)
+
+    new_records: List[dict[str, str]] = []
+    for row in rows:
+        did = (row.get("did") or "").strip()
+        if not did or did in existing_dids:
+            continue
+        record = {
+            "email": row.get("email", ""),
+            "did": did,
+            "status": row.get("status", DEFAULT_STATUS),
+            "type": row.get("type", DEFAULT_TYPE),
+            "feed_url": row.get("feed_url", ""),
+            "survey_completed_at": row.get("survey_completed_at", ""),
+            "prolific_id": row.get("prolific_id", ""),
+            "study_type": row.get("study_type", ""),
+            "audit_timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        new_records.append(record)
+        existing_dids.add(did)
+
+    if not new_records:
+        return
+
+    with csv_path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=[
-                "email",
-                "did",
-                "status",
-                "type",
-                "feed_url",
-                "survey_completed_at",
-            ],
+            fieldnames=existing_fieldnames,
+            extrasaction="ignore",
         )
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(
-                {
-                    "email": row.get("email", ""),
-                    "did": row.get("did", ""),
-                    "status": row.get("status", DEFAULT_STATUS),
-                    "type": row.get("type", DEFAULT_TYPE),
-                    "feed_url": row.get("feed_url", ""),
-                    "survey_completed_at": row.get("survey_completed_at", ""),
-                }
-            )
+        for record in new_records:
+            sanitized = {field: record.get(field, "") for field in existing_fieldnames}
+            writer.writerow(sanitized)
 
 
 def upsert_participants(
@@ -201,6 +363,8 @@ def upsert_participants(
                 record.get("status") or DEFAULT_STATUS
             ).strip() or DEFAULT_STATUS
             new_feed_url = (record.get("feed_url") or "").strip()
+            new_prolific_id = (record.get("prolific_id") or "").strip()
+            new_study_type = (record.get("study_type") or "").strip()
             completed_raw = (record.get("survey_completed_at") or "").strip()
             completed_dt: Optional[datetime] = None
             if completed_raw:
@@ -230,6 +394,16 @@ def upsert_participants(
                 if new_feed_url and new_feed_url != (existing.get("feed_url") or ""):
                     update_values["feed_url"] = new_feed_url
 
+                if new_prolific_id and new_prolific_id != (
+                    existing.get("prolific_id") or ""
+                ):
+                    update_values["prolific_id"] = new_prolific_id
+
+                if new_study_type and new_study_type != (
+                    existing.get("study_type") or ""
+                ):
+                    update_values["study_type"] = new_study_type
+
                 if completed_dt and not existing.get("survey_completed_at"):
                     update_values["survey_completed_at"] = completed_dt
 
@@ -254,6 +428,8 @@ def upsert_participants(
                         type=new_type,
                         language=new_language,
                         feed_url=new_feed_url or None,
+                        prolific_id=new_prolific_id or None,
+                        study_type=new_study_type or None,
                         survey_completed_at=completed_dt,
                     )
                 )

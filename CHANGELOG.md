@@ -1,3 +1,10 @@
+## PREPARE-COMMIT — 2025-10-23 12:10 (agent)
+- branch: feat/roster-audit-monitoring-20251023
+- files: app/cli.py; app/mail_db/schema.py; app/mail_db/migrations.py; app/mail_db/operations.py; app/qualtrics_sync.py; app/participants.py; Makefile; README.md; docs/monitoring.md; docs/qualtrics_sync.md; qualtrics_field_mapping.csv; data/participants.csv; tests/test_cli_cache.py; tests/test_cli_participant.py; tests/test_cli_status.py; tests/test_mail_db_operations.py; tests/test_participants.py; tests/test_qualtrics_sync.py
+- summary: Shifted participant exports to append-only audit logging, added CLI helpers for manual inserts and compliance caching, and extended Qualtrics metadata + monitoring docs/tests accordingly.
+- tests: pytest
+- next: human → review bundle, commit, push
+
 ## COMMITTED — 2025-10-22 11:30 (agent)
 - commit: f17d7e4
 - files: Makefile, README.md, docs/operations.md, docs/qualtrics_sync.md, tests/test_qualtrics_sync.py

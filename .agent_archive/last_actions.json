@@ -218,5 +218,33 @@
     ],
     "preflight": "PASS",
     "branch": "main"
+  },
+  {
+    "ts": "2025-10-23T10:10:00Z",
+    "task": "Roster audit & monitoring uplift",
+    "files": [
+      "Makefile",
+      "README.md",
+      "app/cli.py",
+      "app/mail_db/schema.py",
+      "app/mail_db/migrations.py",
+      "app/mail_db/operations.py",
+      "app/qualtrics_sync.py",
+      "app/participants.py",
+      "docs/monitoring.md",
+      "docs/qualtrics_sync.md",
+      "qualtrics_field_mapping.csv",
+      "data/participants.csv",
+      "tests/test_cli_cache.py",
+      "tests/test_cli_participant.py",
+      "tests/test_cli_status.py",
+      "tests/test_mail_db_operations.py",
+      "tests/test_participants.py",
+      "tests/test_qualtrics_sync.py",
+      "AGENTS_TODO.md",
+      "CHANGELOG.md"
+    ],
+    "preflight": "PASS",
+    "branch": "main"
   }
 ]

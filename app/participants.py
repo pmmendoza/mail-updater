@@ -17,6 +17,8 @@ class Participant:
     include_in_emails: bool = True
     feed_url: Optional[str] = None
     survey_completed_at: Optional[str] = None
+    prolific_id: Optional[str] = None
+    study_type: Optional[str] = None
 
 
 def _to_bool(value: str) -> bool:
@@ -61,6 +63,8 @@ def load_participants(
                 include_flag = status == "active"
                 feed_url = (row.get("feed_url") or "").strip() or None
                 completed_at = (row.get("survey_completed_at") or "").strip() or None
+                prolific_id = (row.get("prolific_id") or "").strip() or None
+                study_type = (row.get("study_type") or "").strip() or None
                 roster.append(
                     Participant(
                         user_did=user_did,
@@ -69,6 +73,8 @@ def load_participants(
                         include_in_emails=include_flag,
                         feed_url=feed_url,
                         survey_completed_at=completed_at,
+                        prolific_id=prolific_id,
+                        study_type=study_type,
                     )
                 )
             if roster:

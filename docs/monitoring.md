@@ -23,6 +23,18 @@ This document outlines the MVP approach for surfacing delivery metrics and bounc
   ```
 - Use the new helper `get_daily_engagement_breakdown` for richer per-day engagement detail in analytics tools.
 
+## Compliance Snapshot Cache
+- Use `python -m app.cli cache-daily-snapshots --study <label>` to materialise per-day
+  compliance metrics into the new `compliance_monitoring` table inside `mail.db`.
+- The command merges `requirements.defaults` with the requested study label from
+  `user_config.yml`, applies the corresponding thresholds (minimum retrievals and
+  engagements), and upserts rows keyed by `(snapshot_date, user_did, study_label)`.
+- Cached columns include `retrievals`, `engagements`, the JSON
+  `engagement_breakdown`, `active_day`, `cumulative_active`, `cumulative_skip`, and
+  the run timestamp (`computed_at`). Queries and dashboards can join this table with
+  `daily_snapshots` or `send_attempts` without recomputing window summaries on the
+  fly.
+
 ## Alerts
 - Schedule `python -m app.cli bounces-scan` daily (cron/systemd). If `participants_updated` is non-empty, email/Slack the outcome.
 - Monitor the quarantine CSV size; if it grows beyond a handful of entries, alert ops to investigate survey data quality.

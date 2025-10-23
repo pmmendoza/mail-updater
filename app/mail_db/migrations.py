@@ -9,7 +9,12 @@ from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Connection
 
-from .schema import SCHEMA_VERSION, metadata, metadata_table
+from .schema import (
+    SCHEMA_VERSION,
+    compliance_monitoring,
+    metadata,
+    metadata_table,
+)
 
 
 MigrationFn = Callable[[Connection], None]
@@ -42,10 +47,31 @@ def _migration_003(conn: Connection) -> None:
         )
 
 
+def _migration_004(conn: Connection) -> None:
+    """Add prolific_id and study_type columns to participants."""
+    existing_cols = {
+        row[1]
+        for row in conn.exec_driver_sql("PRAGMA table_info(participants)").fetchall()
+    }
+    if "prolific_id" not in existing_cols:
+        conn.execute(text("ALTER TABLE participants ADD COLUMN prolific_id TEXT"))
+    if "study_type" not in existing_cols:
+        conn.execute(text("ALTER TABLE participants ADD COLUMN study_type TEXT"))
+
+
+def _migration_005(conn: Connection) -> None:
+    """Create compliance_monitoring table for cached metrics."""
+    inspector = inspect(conn)
+    if compliance_monitoring.name not in inspector.get_table_names():
+        compliance_monitoring.create(conn)
+
+
 MIGRATIONS: Dict[int, MigrationFn] = {
     1: _migration_001,
     2: _migration_002,
     3: _migration_003,
+    4: _migration_004,
+    5: _migration_005,
 }
 
 

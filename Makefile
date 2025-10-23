@@ -6,10 +6,12 @@ REQUIREMENTS_STAMP := $(VENV_DIR)/.requirements.stamp
 DEV_REQUIREMENTS_STAMP := $(VENV_DIR)/.requirements-dev.stamp
 USER_CONFIG := user_config.yml
 DEFAULT_CONFIG := app/default_config.yml
+PARTICIPANTS_CSV := data/participants.csv
+PARTICIPANTS_HEADER := "email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp"
 
 .PHONY: setup setup\:dev sync-env lint test sync-participants
 
-setup: $(REQUIREMENTS_STAMP) $(USER_CONFIG)
+setup: $(REQUIREMENTS_STAMP) $(USER_CONFIG) $(PARTICIPANTS_CSV)
 	@python3 scripts/sync_env.py
 	@echo "Virtual environment ready."
 	@echo "Activate it with: source $(VENV_DIR)/bin/activate"
@@ -39,6 +41,13 @@ $(USER_CONFIG):
 	@if [ ! -f "$@" ]; then \
 		cp $(DEFAULT_CONFIG) $@ && \
 		echo "Created $@ from template. Please customise it before running the CLI."; \
+	fi
+
+$(PARTICIPANTS_CSV):
+	@if [ ! -f "$@" ]; then \
+		mkdir -p $(dir $@) && \
+		printf '%s\n' $(PARTICIPANTS_HEADER) > $@ && \
+		echo "Created $@ stub with header."; \
 	fi
 
 lint: $(DEV_REQUIREMENTS_STAMP)

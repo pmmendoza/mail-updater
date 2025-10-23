@@ -58,9 +58,9 @@ def test_cli_status_lists_recent_attempts(tmp_path, monkeypatch) -> None:
 
     # ensure CSV exists so status can export if needed
     csv_path.write_text(
-        "email,did,status,type,feed_url,survey_completed_at\n"
-        "one@example.com,did:one,active,pilot,https://feeds.example.com/one,\n"
-        "two@example.com,did:two,active,pilot,https://feeds.example.com/two,\n",
+        "email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp\n"
+        "one@example.com,did:one,active,pilot,https://feeds.example.com/one,,,,\n"
+        "two@example.com,did:two,active,pilot,https://feeds.example.com/two,,,,\n",
         encoding="utf-8",
     )
 
@@ -106,8 +106,8 @@ def test_cli_status_with_filters(tmp_path, monkeypatch) -> None:
     )
 
     csv_path.write_text(
-        "email,did,status,type,feed_url,survey_completed_at\n"
-        "three@example.com,did:three,active,pilot,https://feeds.example.com/three,\n",
+        "email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp\n"
+        "three@example.com,did:three,active,pilot,https://feeds.example.com/three,,,,\n",
         encoding="utf-8",
     )
 

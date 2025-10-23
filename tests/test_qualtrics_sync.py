@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import Dict, Iterable, List
 
@@ -45,12 +46,14 @@ def test_rows_from_responses_extracts_unique_participants() -> None:
             "bs_did": "did:one",
             "PROLIFIC_ID": "123",
             "feed_url": "https://feeds.example.com/one",
+            "study_type": "pilot",
         },
         {"email": "", "bs_did": "did:one", "PROLIFIC_ID": "123"},
         {
             "email": "b@example.com",
             "did": "did:two",
             "feed_url": "https://feeds.example.com/two",
+            "STUDY_TYPE": "admin",
         },
         {"prolific_id": "789", "did": "did:three"},
     ]
@@ -64,6 +67,8 @@ def test_rows_from_responses_extracts_unique_participants() -> None:
             "type": "prolific",
             "feed_url": "https://feeds.example.com/one",
             "survey_completed_at": "",
+            "prolific_id": "123",
+            "study_type": "pilot",
         },
         {
             "email": "b@example.com",
@@ -72,6 +77,8 @@ def test_rows_from_responses_extracts_unique_participants() -> None:
             "type": "pilot",
             "feed_url": "https://feeds.example.com/two",
             "survey_completed_at": "",
+            "prolific_id": "",
+            "study_type": "admin",
         },
     ]
     assert quarantine == [
@@ -121,6 +128,8 @@ def test_rows_from_responses_skips_headers_and_preview_rows() -> None:
             "type": "pilot",
             "feed_url": "https://feeds.example.com/real",
             "survey_completed_at": "",
+            "prolific_id": "",
+            "study_type": "",
         }
     ]
     assert quarantine == []
@@ -134,6 +143,7 @@ def test_merge_participants_preserves_existing_metadata() -> None:
             "status": "active",
             "type": "admin",
             "feed_url": "https://feeds.example.com/admin",
+            "study_type": "admin",
         },
         {
             "email": "old@example.com",
@@ -141,6 +151,8 @@ def test_merge_participants_preserves_existing_metadata() -> None:
             "status": "inactive",
             "type": "pilot",
             "feed_url": "https://feeds.example.com/old",
+            "prolific_id": "",
+            "study_type": "pilot",
         },
     ]
     new_rows = [
@@ -150,6 +162,8 @@ def test_merge_participants_preserves_existing_metadata() -> None:
             "status": "active",
             "type": "prolific",
             "feed_url": "https://feeds.example.com/new",
+            "prolific_id": "456",
+            "study_type": "pilot",
         },
         {
             "email": "updated@example.com",
@@ -157,6 +171,8 @@ def test_merge_participants_preserves_existing_metadata() -> None:
             "status": "active",
             "type": "prolific",
             "feed_url": "https://feeds.example.com/updated",
+            "prolific_id": "",
+            "study_type": "pilot",
         },
     ]
 
@@ -168,6 +184,8 @@ def test_merge_participants_preserves_existing_metadata() -> None:
     assert merged_by_did["did:old"]["type"] == "prolific"
     assert merged_by_did["did:new"]["type"] == "prolific"
     assert merged_by_did["did:old"]["feed_url"] == "https://feeds.example.com/updated"
+    assert merged_by_did["did:new"]["prolific_id"] == "456"
+    assert merged_by_did["did:admin"].get("study_type") == "admin"
 
 
 def test_sync_participants_from_qualtrics_updates_csv(
@@ -175,8 +193,8 @@ def test_sync_participants_from_qualtrics_updates_csv(
 ) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url,survey_completed_at\n"
-        "philipp.m.mendoza@gmail.com,did:plc:admin,active,admin,https://feeds.example.com/admin,\n",
+        "email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp\n"
+        "philipp.m.mendoza@gmail.com,did:plc:admin,active,admin,https://feeds.example.com/admin,,,,\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"
@@ -202,11 +220,13 @@ def test_sync_participants_from_qualtrics_updates_csv(
                 "bs_did": "did:new",
                 "PROLIFIC_ID": "123",
                 "feed_url": "https://feeds.example.com/new",
+                "study_type": "pilot",
             },
             {
                 "email": "philipp@example.com",
                 "bs_did": "did:plc:admin",
                 "feed_url": "https://feeds.example.com/admin",
+                "study_type": "admin",
             },
         ]
     }
@@ -232,13 +252,27 @@ def test_sync_participants_from_qualtrics_updates_csv(
     assert roster_by_did["did:new"]["status"] == "active"
     assert roster_by_did["did:new"].get("feed_url") == "https://feeds.example.com/new"
 
-    output = csv_path.read_text(encoding="utf-8")
-    expected_csv = (
-        "email,did,status,type,feed_url,survey_completed_at\n"
-        "person@example.com,did:new,active,prolific,https://feeds.example.com/new,\n"
-        "philipp@example.com,did:plc:admin,inactive,admin,https://feeds.example.com/admin,\n"
-    )
-    assert output == expected_csv
+    with csv_path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        assert reader.fieldnames == [
+            "email",
+            "did",
+            "status",
+            "type",
+            "feed_url",
+            "survey_completed_at",
+            "prolific_id",
+            "study_type",
+            "audit_timestamp",
+        ]
+        rows = list(reader)
+
+    assert len(rows) == 2
+    rows_by_did = {row["did"]: row for row in rows}
+    assert rows_by_did["did:new"]["email"] == "person@example.com"
+    assert rows_by_did["did:new"]["prolific_id"] == "123"
+    assert rows_by_did["did:new"]["audit_timestamp"].strip()
+    assert "did:plc:admin" in rows_by_did
     assert result.added_participants == 1
     assert result.total_participants == 2
     assert result.surveys_considered == 1
@@ -261,8 +295,8 @@ def test_sync_participants_requires_credentials(tmp_path: Path) -> None:
 def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url,survey_completed_at\n"
-        "person@example.com,did:123,active,pilot,https://feeds.example.com/123,\n",
+        "email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp\n"
+        "person@example.com,did:123,active,pilot,https://feeds.example.com/123,,,,\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"
@@ -290,12 +324,13 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
         qualtrics_survey_id=None,
     )
 
+    output_before = csv_path.read_text(encoding="utf-8")
+
     stub = StubClient([], {})
     result = sync_participants_from_qualtrics(settings, client=stub)
 
-    output = csv_path.read_text(encoding="utf-8")
-    assert output.count("person@example.com") == 1
-    assert "inactive" in output
+    output_after = csv_path.read_text(encoding="utf-8")
+    assert output_after == output_before
     roster = list_participants(mail_db_path)
     assert roster == [
         {
@@ -306,6 +341,8 @@ def test_sync_participants_keeps_existing_when_no_surveys(tmp_path: Path) -> Non
             "language": "en",
             "feed_url": "https://feeds.example.com/123",
             "survey_completed_at": "",
+            "prolific_id": "",
+            "study_type": "",
         }
     ]
     assert result.added_participants == 0
@@ -321,7 +358,7 @@ def test_sync_participants_writes_quarantine(
 ) -> None:
     csv_path = tmp_path / "participants.csv"
     csv_path.write_text(
-        "email,did,status,type,feed_url,survey_completed_at\n",
+        "email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp\n",
         encoding="utf-8",
     )
     mail_db_path = tmp_path / "mail.sqlite"

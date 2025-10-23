@@ -1,2 +1,2 @@
-email,did,status,type,feed_url
-philipp.m.mendoza@gmail.com,did:plc:3vomhawgkjhtvw4euuxbll3r,active,admin,https://feeds.example.com/admin
+email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp
+philipp.m.mendoza@gmail.com,did:plc:3vomhawgkjhtvw4euuxbll3r,active,admin,https://feeds.example.com/admin,,,,

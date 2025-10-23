@@ -11,6 +11,9 @@ The Qualtrics roster sync is the canonical way to populate and maintain `mail.db
 - `type` — participant type (`pilot`, `prolific`, `admin`, `test`)
 - `language` — optional language code (defaults to `en`)
 - `feed_url` — **required**; identifies the feed assigned to the participant
+- `survey_completed_at` — optional ISO-8601 timestamp representing survey completion
+- `prolific_id` — optional identifier used to synthesise fallback email addresses
+- `study_type` — optional label that tags the participant's study cohort
 
 Rows missing either DID, email, or `feed_url` are written to a quarantine CSV (see below).
 
@@ -30,7 +33,8 @@ make sync-participants
 
 - The command runs **manually** (no scheduled job yet).
 - Qualtrics survey selection can be narrowed with `--survey-filter` (regex).
-- Successful runs upsert into `mail.db`, then re-export `data/participants.csv` for audit.
+- Successful runs upsert into `mail.db` and append any new participants to
+  `data/participants.csv` as part of the audit log.
 
 ## Quarantine handling
 - Invalid or incomplete records are written to `data/qualtrics_quarantine.csv`.
@@ -47,9 +51,12 @@ make sync-participants
 
 ## Manual roster edits
 - Prefer manipulating participants through CLI helpers (`participant set-status`, `participant import-csv`).
-- The CSV (`data/participants.csv`) is now a read-only audit export; mail.db stores the source of truth.
+- The CSV (`data/participants.csv`) is a read-only, append-only audit export; mail.db stores the source of truth.
 - After manual changes, rerun `validate-participants` before sending mail.
-- Field mapping is stored in `qualtrics_field_mapping.csv`; edit that file when you rename survey questions (e.g., switching to `email_pilot`). `_rows_from_responses` consults the mapping before falling back to heuristic key detection.
+- Field mapping is stored in `qualtrics_field_mapping.csv`; edit that file when you
+  rename survey questions (e.g., switching to `email_pilot`). `_rows_from_responses`
+  consults the mapping before falling back to heuristic key detection, and now
+  supports `prolific_id` and `study_type` keys in addition to the core roster fields.
 
 ## Legacy R script parity notes
 - The retired `participants-updater.R` script fetched the same Qualtrics surveys using `QUALTRICS_API_KEY`; the Python CLI expects `QUALTRICS_API_TOKEN` but otherwise mirrors the workflow.

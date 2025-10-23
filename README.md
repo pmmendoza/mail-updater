@@ -20,15 +20,17 @@ This directory contains a minimal, working example of the mail updater pipeline.
    # set PARTICIPANTS_CSV_PATH=data/participants.csv to use the bundled roster sample
    ```
 3. **Prepare participant data**
-   - Create `data/participants.csv` (relative to the repository root) with columns:
-     `email,did,status,type,feed_url`.
-   - Seed a row for the study admin (see `data/participants.csv` for an example).
-   - Once `mail.db` is populated (e.g., via the Qualtrics sync), CLI commands will
-     automatically read participants from the database and use the CSV only as a
-     fallback or export for manual edits.
+   - `make setup` scaffolds `data/participants.csv` with the audit header
+     `email,did,status,type,feed_url,survey_completed_at,prolific_id,study_type,audit_timestamp`
+     whenever the file is missing.
+   - The CSV now functions as an append-only audit log. `mail.db` remains the
+     source of truth; new roster entries append a row with an `audit_timestamp`
+     while existing rows are left untouched.
+   - Use `python -m app.cli participant add --email … --did …` to seed manual test
+     accounts without editing the CSV by hand.
    - To migrate an existing CSV roster into the database, run
-     `python -m app.cli participant import-csv` (re-exports the canonical CSV
-     afterwards).
+     `python -m app.cli participant import-csv` (appends any new participants to the
+     audit log afterwards).
    - Optionally run `python -m app.cli sync-participants` to pull the latest roster
      from Qualtrics once credentials are in place.
 4. **Run the CLI**
@@ -37,12 +39,15 @@ This directory contains a minimal, working example of the mail updater pipeline.
    python -m app.cli preview --user-did did:example:123
    python -m app.cli send-daily --dry-run # writes .eml files to outbox/
    python -m app.cli validate-participants # confirm roster entries have data
+   python -m app.cli participant add --email test@example.com --did did:example:test --feed-url https://feeds.example.com/test
+   python -m app.cli participant seed-completion --timestamp 2025-10-01T09:00:00Z
    python -m app.cli participant set-status --user-did did:example:123 --status inactive --reason "manual hold"
    python -m app.cli status --limit 10 --user-did did:example:123
+   python -m app.cli cache-daily-snapshots --study pilot --from-date 2025-10-01
    python -m app.cli bounces-scan --keep-unseen
    ```
 
-The status command updates `mail.db` first and then re-exports `data/participants.csv` so older tooling stays in sync.
+Roster mutations update `mail.db`; the audit CSV only receives new participant rows so that historical entries remain untouched.
 
 > For development workflows (linting/tests), install tooling with `make setup:dev` after the initial `make setup`.
 
@@ -115,7 +120,11 @@ python -m app.cli sync-participants
 make sync-participants              # honours QUALTRICS_* env vars and optional SURVEY_FILTER
 ```
 
-- Each run rewrites both `mail.db` (source of truth) and `data/participants.csv` (audit export). Any rows that fail validation are written to `../data/qualtrics_quarantine.csv` next to the repo’s `data/` folder; we intentionally keep the file so operators can inspect and fix the source survey data before re-running the sync.
+- Each run upserts `mail.db` (source of truth) and appends any newly discovered
+  participants to `data/participants.csv` (the audit export). Any rows that fail
+  validation are written to `../data/qualtrics_quarantine.csv` next to the repo’s
+  `data/` folder; we intentionally keep the file so operators can inspect and fix the
+  source survey data before re-running the sync.
 - Field-to-column resolution is controlled by `qualtrics_field_mapping.csv`. Update that mapping if you rename survey questions (e.g., switching to `email_pilot`); the sync will try those keys first and fall back to heuristics.
 - Provide explicit survey IDs via `user_config.yml` (`qualtrics.survey_ids`) or the CLI (`--survey-id`, repeatable) when working with multiple country-specific surveys. If no IDs are supplied, the optional `--survey-filter` (or YAML `survey_filter`) falls back to regex matching.
 
